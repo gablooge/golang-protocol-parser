@@ -38,7 +38,9 @@ func main() {
 			fmt.Println("goose.appId : ", gooseData.appid)
 			fmt.Println("goose.length : ", gooseData.length)
 			fmt.Println("goose.gocbRef : ", gooseData.gocbRef)
+			fmt.Println("goose.timeallowedtolive : ", gooseData.timeallowedtolive)
 		}
+		break
 	}
 
 	// TODO: modbus

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"strconv"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -32,7 +31,6 @@ type GooseLayerPacket struct {
 	HeaderData   []byte
 	PayloadData  []byte
 	EthernetType []byte
-	LengthData   int16
 	Data         GooseData
 }
 
@@ -40,44 +38,48 @@ func (m GooseLayerPacket) LayerType() gopacket.LayerType { return GooseLayerType
 func (m GooseLayerPacket) LayerContents() []byte         { return m.HeaderData }
 func (m GooseLayerPacket) LayerPayload() []byte          { return m.EthernetType }
 
-func parseGooseData(sliceString []string, strLastPosition int, padding string) (string, int) {
-	resultStr := ""
-	for ind, data := range sliceString[strLastPosition:] {
+func parseGooseData(sliceBytes []byte, lastPosition int, padding byte) ([]byte, int) {
+	results := []byte{}
+	for ind, data := range sliceBytes[lastPosition:] {
 		if data == padding {
-			strLastPosition = strLastPosition + ind
+			lastPosition = lastPosition + ind
 			break
 		} else {
 			if ind > 1 {
-				resultStr = resultStr + data
+				results = append(results, data)
 			}
 		}
 	}
 
-	return resultStr, strLastPosition
+	return results, lastPosition
 }
 
 func decodeGooseLayer(data []byte, p gopacket.PacketBuilder) error {
 	payloads := data[14:]
-	payloadsPdu := payloads[9:]
-	payloadsLen := len(payloads)
+	pduIdx := 24
 
-	// convert to slice
-	payloadSlice := splitBy(hex.EncodeToString(payloadsPdu), 2)
+	if data[23] == byte(0x81) {
+		pduIdx = 25
+	}
+
+	payloadsPdu := data[pduIdx:]
+	dataLength := binary.BigEndian.Uint16(payloads[2:4])
 
 	lastPosition := 0
-	parsedString := ""
 
-	parsedString, lastPosition = parseGooseData(payloadSlice, lastPosition, "81")
-	fmt.Println("parsedString : ", parsedString)
+	parsedBytes, lastPosition := parseGooseData(payloadsPdu, lastPosition, byte(0x81))
+	fmt.Println("parsedBytes : ", parsedBytes)
+	fmt.Println("parsedBytes : ", hex.EncodeToString(parsedBytes))
+	fmt.Println("parsedBytes : ", string(parsedBytes))
+	gocbRef := string(parsedBytes)
+	fmt.Println("gocbRef : ", gocbRef)
 
-	gocbRef, _ := hex.DecodeString(parsedString)
-
-	parsedString, _ = parseGooseData(payloadSlice, lastPosition, "82")
-	timeallowedtolive, _ := strconv.ParseInt(parsedString, 16, 64)
+	parsedBytes, _ = parseGooseData(payloadsPdu, lastPosition, byte(0x82))
+	timeallowedtolive := binary.BigEndian.Uint16(parsedBytes)
 
 	gooseData := GooseData{
 		appid:             hex.EncodeToString(payloads[:2]),
-		length:            binary.BigEndian.Uint16(payloads[2:4]),
+		length:            dataLength,
 		gocbRef:           string(gocbRef),
 		timeallowedtolive: int16(timeallowedtolive),
 	}
@@ -87,7 +89,6 @@ func decodeGooseLayer(data []byte, p gopacket.PacketBuilder) error {
 			HeaderData:   data[:14],
 			PayloadData:  payloads,
 			EthernetType: data[12:14],
-			LengthData:   int16(payloadsLen),
 			Data:         gooseData,
 		},
 	)
