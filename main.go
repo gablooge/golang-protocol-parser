@@ -35,12 +35,12 @@ func main() {
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			fmt.Println("EtherType : ", hex.EncodeToString(gooseLayerData.EthernetType))
-			fmt.Println("goose.appId : ", gooseData.appid)
-			fmt.Println("goose.length : ", gooseData.length)
-			fmt.Println("goose.gocbRef : ", gooseData.gocbRef)
-			fmt.Println("goose.timeallowedtolive : ", gooseData.timeallowedtolive)
+			fmt.Println("goose.appId : ", gooseData.AppId)
+			fmt.Println("goose.length : ", gooseData.Length)
+			fmt.Println("goose.gocbRef : ", gooseData.GocbRef)
+			fmt.Println("goose.timeallowedtolive : ", gooseData.Timeallowedtolive)
 		}
-		break
+
 	}
 
 	// TODO: modbus

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -18,12 +17,12 @@ var GooseLayerType = gopacket.RegisterLayerType(
 )
 
 type GooseData struct {
-	appid             string `json:"appid"`
-	length            uint16 `json:"length"`
-	gocbRef           string `json:"gocbRef"`
-	timeallowedtolive int16  `json:"timeallowedtolive,omitempty"`
-	datSet            string `json:"datSet"`
-	goID              string `json:"goID`
+	AppId             string `json:"appid"`
+	Length            uint16 `json:"length"`
+	GocbRef           string `json:"gocbRef"`
+	Timeallowedtolive int16  `json:"timeallowedtolive,omitempty"`
+	DatSet            string `json:"datSet"`
+	GoID              string `json:"goID`
 }
 
 // Implement goose layer
@@ -68,20 +67,22 @@ func decodeGooseLayer(data []byte, p gopacket.PacketBuilder) error {
 	lastPosition := 0
 
 	parsedBytes, lastPosition := parseGooseData(payloadsPdu, lastPosition, byte(0x81))
-	fmt.Println("parsedBytes : ", parsedBytes)
-	fmt.Println("parsedBytes : ", hex.EncodeToString(parsedBytes))
-	fmt.Println("parsedBytes : ", string(parsedBytes))
+	// fmt.Println("parsedBytes : ", parsedBytes)
+	// fmt.Println("parsedBytes : ", hex.EncodeToString(parsedBytes))
+	// fmt.Println("parsedBytes : ", string(parsedBytes))
 	gocbRef := string(parsedBytes)
-	fmt.Println("gocbRef : ", gocbRef)
+	// fmt.Println("gocbRef : ", gocbRef)
 
 	parsedBytes, _ = parseGooseData(payloadsPdu, lastPosition, byte(0x82))
 	timeallowedtolive := binary.BigEndian.Uint16(parsedBytes)
 
+	// TODO: continue parsing
+
 	gooseData := GooseData{
-		appid:             hex.EncodeToString(payloads[:2]),
-		length:            dataLength,
-		gocbRef:           string(gocbRef),
-		timeallowedtolive: int16(timeallowedtolive),
+		AppId:             hex.EncodeToString(payloads[:2]),
+		Length:            dataLength,
+		GocbRef:           string(gocbRef),
+		Timeallowedtolive: int16(timeallowedtolive),
 	}
 
 	p.AddLayer(
