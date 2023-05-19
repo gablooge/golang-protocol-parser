@@ -3,45 +3,54 @@ package main
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"strings"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
 
-var GooseLayerType = gopacket.RegisterLayerType(
-	GooseLayerTypeIndex,
-	gopacket.LayerTypeMetadata{
-		Name:    "GooseLayer",
-		Decoder: gopacket.DecodeFunc(decodeGooseLayer),
-	},
+const (
+	GooseEthernetType   = 35000 // 0x88b8
+	GooseLayerTypeIndex = 2001
+	GoosePDUTag         = 0x81
 )
 
-type GooseData struct {
+type GooseInfo struct {
 	AppId             string `json:"appid"`
 	Length            uint16 `json:"length"`
-	GocbRef           string `json:"gocbRef"`
+	GocbRef           string `json:"gocbref"`
 	Timeallowedtolive int16  `json:"timeallowedtolive,omitempty"`
-	DatSet            string `json:"datSet"`
-	GoID              string `json:"goID`
+	DatSet            string `json:"datset"`
 }
 
-// Implement goose layer
-type GooseLayerPacket struct {
+func (g *GooseInfo) IsZero() bool {
+	return g.AppId == "" && g.Length == 0 && g.GocbRef == "" && g.Timeallowedtolive == 0 && g.DatSet == ""
+}
+
+func (g *GooseInfo) GetModel() string {
+	gocbRefSplit := strings.Split(g.GocbRef, "_")
+	if len(gocbRefSplit) > 0 {
+		return gocbRefSplit[0]
+	} else {
+		return g.GocbRef
+	}
+}
+
+type Goose struct {
+	layers.BaseLayer
 	HeaderData   []byte
-	PayloadData  []byte
 	EthernetType []byte
-	Data         GooseData
+	Info         GooseInfo
 }
-
-func (m GooseLayerPacket) LayerType() gopacket.LayerType { return GooseLayerType }
-func (m GooseLayerPacket) LayerContents() []byte         { return m.HeaderData }
-func (m GooseLayerPacket) LayerPayload() []byte          { return m.EthernetType }
 
 func parseGooseData(sliceBytes []byte, lastPosition int, padding byte) ([]byte, int) {
 	results := []byte{}
+
 	for ind, data := range sliceBytes[lastPosition:] {
 		if data == padding {
 			lastPosition = lastPosition + ind
+
 			break
 		} else {
 			if ind > 1 {
@@ -53,46 +62,63 @@ func parseGooseData(sliceBytes []byte, lastPosition int, padding byte) ([]byte, 
 	return results, lastPosition
 }
 
-func decodeGooseLayer(data []byte, p gopacket.PacketBuilder) error {
+// LayerType returns LayerTypeGoose.
+func (h *Goose) LayerType() gopacket.LayerType { return LayerTypeGoose }
+
+// decodeGoose decodes the byte slice into a Goose type.
+func decodeGoose(data []byte, p gopacket.PacketBuilder) error {
+	g := &Goose{}
+
+	err := g.DecodeFromBytes(data, p)
+	if err != nil {
+		return err
+	}
+
+	p.AddLayer(g)
+
+	return p.NextDecoder(layers.LayerTypeEthernet)
+}
+
+// DecodeFromBytes decodes the slice into the Goose struct.
+func (g *Goose) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
+	ethernetType := uint16(binary.BigEndian.Uint16(data[12:14]))
+
+	if ethernetType != GooseEthernetType {
+		df.SetTruncated()
+
+		return errors.New("Invalid Goose packet.")
+	}
+
 	payloads := data[14:]
 	pduIdx := 24
 
-	if data[23] == byte(0x81) {
+	if data[23] == byte(GoosePDUTag) {
 		pduIdx = 25
 	}
 
 	payloadsPdu := data[pduIdx:]
 	dataLength := binary.BigEndian.Uint16(payloads[2:4])
-
 	lastPosition := 0
 
-	parsedBytes, lastPosition := parseGooseData(payloadsPdu, lastPosition, byte(0x81))
-	// fmt.Println("parsedBytes : ", parsedBytes)
-	// fmt.Println("parsedBytes : ", hex.EncodeToString(parsedBytes))
-	// fmt.Println("parsedBytes : ", string(parsedBytes))
+	parsedBytes, lastPosition := parseGooseData(payloadsPdu, lastPosition, byte(GoosePDUTag))
 	gocbRef := string(parsedBytes)
-	// fmt.Println("gocbRef : ", gocbRef)
 
 	parsedBytes, _ = parseGooseData(payloadsPdu, lastPosition, byte(0x82))
 	timeallowedtolive := binary.BigEndian.Uint16(parsedBytes)
 
 	// TODO: continue parsing
 
-	gooseData := GooseData{
+	gooseInfo := GooseInfo{
 		AppId:             hex.EncodeToString(payloads[:2]),
 		Length:            dataLength,
 		GocbRef:           string(gocbRef),
 		Timeallowedtolive: int16(timeallowedtolive),
 	}
 
-	p.AddLayer(
-		&GooseLayerPacket{
-			HeaderData:   data[:14],
-			PayloadData:  payloads,
-			EthernetType: data[12:14],
-			Data:         gooseData,
-		},
-	)
-	// Determine how to handle the rest of the packet
-	return p.NextDecoder(layers.LayerTypeEthernet)
+	// g.Payload = payloads
+	g.Info = gooseInfo
+	g.HeaderData = data[:14]
+	g.EthernetType = data[12:14]
+
+	return nil
 }

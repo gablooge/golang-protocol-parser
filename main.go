@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"log"
 	"strconv"
@@ -10,31 +9,26 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-var (
-	pcapFile string = "pcaps/goose.pcap"
-	handle   *pcap.Handle
-	err      error
-)
+func printGoose() {
+	fmt.Println("======= Welcome Goose =======")
 
-func main() {
-	// Open file instead of device
-	handle, err = pcap.OpenOffline(pcapFile)
+	gooseFileHandle, err := pcap.OpenOffline("pcaps/goose.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer handle.Close()
+	defer gooseFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(handle, GooseLayerType)
-	var i int
+	packetSource := gopacket.NewPacketSource(gooseFileHandle, LayerTypeGoose)
+
+	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(GooseLayerType)
+		layersdata := packet.Layer(LayerTypeGoose)
 		if layersdata != nil {
-			gooseLayerData, _ := layersdata.(*GooseLayerPacket)
-			gooseData := gooseLayerData.Data
+			gooseLayerData, _ := layersdata.(*Goose)
+			gooseData := gooseLayerData.Info
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
-			fmt.Println("EtherType : ", hex.EncodeToString(gooseLayerData.EthernetType))
 			fmt.Println("goose.appId : ", gooseData.AppId)
 			fmt.Println("goose.length : ", gooseData.Length)
 			fmt.Println("goose.gocbRef : ", gooseData.GocbRef)
@@ -42,8 +36,41 @@ func main() {
 		}
 
 	}
+}
+
+func printBLE() {
+	fmt.Println("======= Welcome BLE =======")
+
+	bleFileHandle, err := pcap.OpenOffline("pcaps/ble.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer bleFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(bleFileHandle, LayerTypeBLE)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeBLE)
+		if layersdata != nil {
+			bleLayerData, _ := layersdata.(*BLE)
+			// bleData := bleLayerData.Info
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println("HCIPacketType : ", bleLayerData.HCIPacketType)
+		}
+
+	}
+}
+
+func main() {
+	// printGoose()
+	printBLE()
 
 	// TODO: modbus
 	// TODO: mqtt
 	// TODO: lorawan
+
+	fmt.Println("======= Done =======")
 }
