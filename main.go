@@ -64,32 +64,6 @@ func printBLE() {
 	}
 }
 
-func printZigbee() {
-	fmt.Println("======= Welcome Zigbee =======")
-	zigbeeFileHandle, err := pcap.OpenOffline("pcaps/zigbee.pcap")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer zigbeeFileHandle.Close()
-
-	packetSource := gopacket.NewPacketSource(zigbeeFileHandle, LayerTypeZigbee)
-
-	i := 0
-	// Loop through packets in file
-	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeZigbee)
-		if layersdata != nil {
-			zigbeeLayerData, _ := layersdata.(*Zigbee)
-			i = i + 1
-			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
-			fmt.Println("zigbee.etherType : ", zigbeeLayerData.EthernetType)
-			fmt.Println("zigbee.headerData : ", zigbeeLayerData.HeaderData)
-			fmt.Println("zigbee.Info.Radius : ", zigbeeLayerData.Info.Radius)
-		}
-
-	}
-}
-
 func printLorawan() {
 	fmt.Println("===== Welcome LoRawan =====")
 	lorawanFileHandle, err := pcap.OpenOffline("pcaps/lorawan.pcapng")
@@ -117,6 +91,32 @@ func printLorawan() {
 	}
 }
 
+func printModbusTcp() {
+	fmt.Println("==== Welcome Modbus TCP ====")
+	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/modbustcp.pcapng")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer modbustcpFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusTCP)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeModbusTCP)
+		if layersdata != nil {
+			modbusLayerData, _ := layersdata.(*ModbusTCP)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.TransactionIdentifier)
+			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.ProtocolIdentifier)
+			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.UnitIdentifier)
+		}
+
+	}
+}
+
 func main() {
 	// printGoose()
 	printBLE()
@@ -126,7 +126,6 @@ func main() {
 	// TODO: lorawan
 
 	fmt.Println("======= Done =======")
-
-	printZigbee()
 	printLorawan()
+	printModbusTcp()
 }
