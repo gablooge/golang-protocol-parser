@@ -117,6 +117,33 @@ func printModbusTcp() {
 	}
 }
 
+func printModbusUdp() {
+	fmt.Println("==== Welcome Modbus UDP ====")
+	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/mbudp.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer modbustcpFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusUdp)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeModbusUdp)
+		if layersdata != nil {
+			modbusLayerData, _ := layersdata.(*ModbusUdp)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			// fmt.Println("print ", modbusLayerData.BaseLayer)
+			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.Info.TransId)
+			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.Info.ProtId)
+			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.Info.UnitId)
+		}
+
+	}
+}
+
 func main() {
 	// printGoose()
 	printBLE()
@@ -128,4 +155,5 @@ func main() {
 	fmt.Println("======= Done =======")
 	printLorawan()
 	printModbusTcp()
+	printModbusUdp()
 }
