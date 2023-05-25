@@ -111,8 +111,9 @@ func printModbusTcp() {
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.TransactionIdentifier)
 			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.ProtocolIdentifier)
-			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.UnitIdentifier)
-			fmt.Println("modbustcp.Data : ", modbusLayerData.Data)
+			fmt.Println("modbustcp.Info.UnitIdentifier : ", modbusLayerData.Info.UnitIdentifier)
+			fmt.Println("modbustcp.Info.FuncCode : ", modbusLayerData.Info.FuncCode)
+			fmt.Println("modbustcp.Info.Data : ", modbusLayerData.Info.Data)
 		}
 
 	}
@@ -137,12 +138,12 @@ func printModbusUdp() {
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			// fmt.Println("print ", modbusLayerData.BaseLayer)
-			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.Info.TransId)
-			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.Info.ProtId)
-			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.Info.UnitId)
-			fmt.Println("modbustcp.ReferenceNumber : ", modbusLayerData.Info.ReferenceNum)
-			fmt.Println("modbustcp.WordCount : ", modbusLayerData.Info.WordCnt)
-			fmt.Println("modbustcp.CannotClassify : ", modbusLayerData.Info.CannotClassify)
+			fmt.Println("modbusudp.TransactionIdentifier : ", modbusLayerData.Info.TransId)
+			fmt.Println("modbusudp.ProtocolIdentifier : ", modbusLayerData.Info.ProtId)
+			fmt.Println("modbusudp.UnitIdentifier : ", modbusLayerData.Info.UnitId)
+			fmt.Println("modbusudp.ReferenceNumber : ", modbusLayerData.Info.ReferenceNum)
+			fmt.Println("modbusudp.WordCount : ", modbusLayerData.Info.WordCnt)
+			fmt.Println("modbusudp.CannotClassify : ", modbusLayerData.Info.CannotClassify)
 		}
 
 	}

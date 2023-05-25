@@ -53,14 +53,19 @@ func (mp ModbusProtocol) String() string {
 // Type ModbusTCP implements the DecodingLayer interface. Each ModbusTCP object
 // represents in a structured form the MODBUS Application Protocol header (MBAP) record present as the TCP
 // payload in an ModbusTCP TCP packet.
+type Info struct {
+	Length         uint16 // Number of following bytes (includes 1 byte for UnitIdentifier + Modbus data length
+	UnitIdentifier uint8
+	FuncCode       uint8
+	Data           []byte
+}
+
 type ModbusTCP struct {
 	layers.BaseLayer // Stores the packet bytes and payload (Modbus PDU) bytes .
 
 	TransactionIdentifier uint16         // Identification of a MODBUS Request/Response transaction
 	ProtocolIdentifier    ModbusProtocol // It is used for intra-system multiplexing
-	Length                uint16         // Number of following bytes (includes 1 byte for UnitIdentifier + Modbus data length
-	UnitIdentifier        uint8          // Identification of a remote slave connected on a serial line or on other buses
-	Data                  []byte
+	Info                  Info
 }
 
 //******************************************************************************
@@ -105,40 +110,18 @@ func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
 // and returns nil.
 // Upon failure, it returns an error (non nil).
 func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	// If the data block is too short to be a MBAP record, then return an error.
-	// if len(data) < mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes {
-	// 	df.SetTruncated()
-	// 	return errors.New("ModbusTCP packet too short")
-	// }
-
-	// if len(data) > mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes {
-	// 	fmt.Println("test", data)
-	// 	df.SetTruncated()
-	// 	return errors.New("ModbusTCP packet too long")
-	// }
 	hex_code_string := string(hex.EncodeToString(data[36:38]))
 	if hex_code_string != "01f6" {
 		return errors.New("ModbusTCP port wrong")
 	}
 
-	// ModbusTCP type embeds type BaseLayer which contains two fields:
-	//    Contents is supposed to contain the bytes of the data at this level (MPBA).
-	//    Payload is supposed to contain the payload of this level (PDU).
 	d.BaseLayer = layers.BaseLayer{Contents: data[:13], Payload: data[54:]}
 
-	// Extract the fields from the block of bytes.
-	// The fields can just be copied in big endian order.
 	d.TransactionIdentifier = binary.BigEndian.Uint16(data[53:55])
-	// d.ProtocolIdentifier = ModbusProtocol(binary.BigEndian.Uint32(data[56:58]))
-	d.Length = binary.BigEndian.Uint16(data[58:60])
-
-	// Length should have the size of the payload plus one byte (size of UnitIdentifier)
-	// if d.Length != uint16(len(d.BaseLayer.Payload)+1) {
-	// 	df.SetTruncated()
-	// 	return errors.New("ModbusTCP packet with wrong field value (Length)")
-	// }
-	d.UnitIdentifier = uint8(data[6])
-	d.Data = data[62:]
+	d.Info.Length = binary.BigEndian.Uint16(data[58:60])
+	d.Info.UnitIdentifier = uint8(data[6])
+	d.Info.Data = data[62:]
+	d.Info.FuncCode = data[61]
 
 	return nil
 }
