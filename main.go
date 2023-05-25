@@ -25,16 +25,23 @@ func printGoose() {
 	for packet := range packetSource.Packets() {
 		layersdata := packet.Layer(LayerTypeGoose)
 		if layersdata != nil {
-			gooseLayerData, _ := layersdata.(*Goose)
+			gooseLayerData, _ := layersdata.(*GOOSE)
 			gooseData := gooseLayerData.Info
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
-			fmt.Println("goose.appId : ", gooseData.AppId)
+			fmt.Println("goose.appId : ", gooseData.AppID)
 			fmt.Println("goose.length : ", gooseData.Length)
 			fmt.Println("goose.gocbRef : ", gooseData.GocbRef)
 			fmt.Println("goose.timeallowedtolive : ", gooseData.Timeallowedtolive)
+			fmt.Println("goose.datset : ", gooseData.DatSet)
+			fmt.Println("goose.t : ", gooseData.T)
+			fmt.Println("goose.stnum : ", gooseData.StNum)
+			fmt.Println("goose.sqnum : ", gooseData.SqNum)
+			fmt.Println("goose.simulation : ", gooseData.Simulation)
+			fmt.Println("goose.confrev : ", gooseData.ConfRev)
+			fmt.Println("goose.ndscom : ", gooseData.NdsCom)
+			fmt.Println("goose.numdatsetentries : ", gooseData.NumDatSetEntries)
 		}
-
 	}
 }
 
@@ -60,7 +67,6 @@ func printBLE() {
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			fmt.Println("HCIPacketType : ", bleLayerData.HCIPacketType)
 		}
-
 	}
 }
 
@@ -150,7 +156,7 @@ func printModbusUdp() {
 }
 
 func main() {
-	// printGoose()
+	printGoose()
 	printBLE()
 
 	// TODO: modbus
