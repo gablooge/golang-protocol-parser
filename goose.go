@@ -86,7 +86,7 @@ func parseGOOSEData(sliceBytes []byte, lastPosition int, padding byte) ([]byte, 
 }
 
 // LayerType returns LayerTypeGOOSE.
-func (g *GOOSE) LayerType() gopacket.LayerType { return LayerTypeGOOSE }
+func (g *GOOSE) LayerType() gopacket.LayerType { return LayerTypeGoose }
 
 func bytesToInt(bytes []byte) int {
 	var result int
