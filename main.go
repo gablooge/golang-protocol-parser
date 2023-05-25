@@ -156,8 +156,8 @@ func main() {
 	// TODO: mqtt
 	// TODO: lorawan
 
-	fmt.Println("======= Done =======")
 	printLorawan()
 	printModbusTcp()
-	// printModbusUdp()
+	printModbusUdp()
+	fmt.Println("======= Done =======")
 }
