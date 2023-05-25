@@ -25,10 +25,6 @@ import (
 //
 //******************************************************************************
 
-const mbapRecordSizeInBytes int = 7
-const modbusPDUMinimumRecordSizeInBytes int = 2
-const modbusPDUMaximumRecordSizeInBytes int = 253
-
 // ModbusProtocol type
 type ModbusProtocol uint16
 
@@ -53,19 +49,19 @@ func (mp ModbusProtocol) String() string {
 // Type ModbusTCP implements the DecodingLayer interface. Each ModbusTCP object
 // represents in a structured form the MODBUS Application Protocol header (MBAP) record present as the TCP
 // payload in an ModbusTCP TCP packet.
-type Info struct {
-	Length         uint16 // Number of following bytes (includes 1 byte for UnitIdentifier + Modbus data length
-	UnitIdentifier uint8
-	FuncCode       uint8
-	Data           []byte
+type ModbusTCPInfo struct {
+	Length         uint16 `json:"length"`
+	UnitIdentifier uint8  `json:"unit_identifier"`
+	FuncCode       uint8  `json:"func_code"`
+	Data           []byte `json:"data"`
 }
 
 type ModbusTCP struct {
 	layers.BaseLayer // Stores the packet bytes and payload (Modbus PDU) bytes .
 
-	TransactionIdentifier uint16         // Identification of a MODBUS Request/Response transaction
-	ProtocolIdentifier    ModbusProtocol // It is used for intra-system multiplexing
-	Info                  Info
+	TransactionIdentifier uint16 `json:"transaction_identifier"`
+	ProtocolIdentifier    ModbusProtocol
+	ModbusTCPInfo         ModbusTCPInfo
 }
 
 //******************************************************************************
@@ -118,10 +114,10 @@ func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) err
 	d.BaseLayer = layers.BaseLayer{Contents: data[:13], Payload: data[54:]}
 
 	d.TransactionIdentifier = binary.BigEndian.Uint16(data[53:55])
-	d.Info.Length = binary.BigEndian.Uint16(data[58:60])
-	d.Info.UnitIdentifier = uint8(data[6])
-	d.Info.Data = data[62:]
-	d.Info.FuncCode = data[61]
+	d.ModbusTCPInfo.Length = binary.BigEndian.Uint16(data[58:60])
+	d.ModbusTCPInfo.UnitIdentifier = uint8(data[6])
+	d.ModbusTCPInfo.Data = data[62:]
+	d.ModbusTCPInfo.FuncCode = data[61]
 
 	return nil
 }

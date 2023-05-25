@@ -26,9 +26,9 @@ type ModbusUdpInfo struct {
 
 type ModbusUdp struct {
 	layers.BaseLayer
-	HeaderData   []byte
-	EthernetType []byte
-	Info         ModbusUdpInfo
+	HeaderData    []byte
+	EthernetType  []byte
+	ModbusUDPInfo ModbusUdpInfo
 }
 
 // LayerType returns LayerTypeGoose.
@@ -70,7 +70,7 @@ func (g *ModbusUdp) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) err
 	// fmt.Println("Port String ", hex.EncodeToString(data[42:44]))
 
 	// g.Payload = payloads
-	g.Info = modbusInfo
+	g.ModbusUDPInfo = modbusInfo
 	g.HeaderData = data[:13]
 	// g.EthernetType = ethernetType
 	return nil
