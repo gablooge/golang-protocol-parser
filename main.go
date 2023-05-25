@@ -112,6 +112,7 @@ func printModbusTcp() {
 			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.TransactionIdentifier)
 			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.ProtocolIdentifier)
 			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.UnitIdentifier)
+			fmt.Println("modbustcp.Data : ", modbusLayerData.Data)
 		}
 
 	}
@@ -139,6 +140,9 @@ func printModbusUdp() {
 			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.Info.TransId)
 			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.Info.ProtId)
 			fmt.Println("modbustcp.UnitIdentifier : ", modbusLayerData.Info.UnitId)
+			fmt.Println("modbustcp.ReferenceNumber : ", modbusLayerData.Info.ReferenceNum)
+			fmt.Println("modbustcp.WordCount : ", modbusLayerData.Info.WordCnt)
+			fmt.Println("modbustcp.CannotClassify : ", modbusLayerData.Info.CannotClassify)
 		}
 
 	}
@@ -155,5 +159,5 @@ func main() {
 	fmt.Println("======= Done =======")
 	printLorawan()
 	printModbusTcp()
-	printModbusUdp()
+	// printModbusUdp()
 }

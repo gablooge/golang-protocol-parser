@@ -15,10 +15,13 @@ const (
 )
 
 type ModbusUdpInfo struct {
-	ProtId  uint16 `json:"prot_id"`
-	TransId uint16 `json:"trans_id"`
-	UnitId  uint8  `json:"unit_id"`
-	Len     uint16 `json:"len"`
+	ProtId         uint16 `json:"prot_id"`
+	TransId        uint16 `json:"trans_id"`
+	UnitId         uint8  `json:"unit_id"`
+	Len            uint16 `json:"len"`
+	ReferenceNum   uint16 `json:"reference_num"`
+	WordCnt        uint16 `json:"word_cnt"`
+	CannotClassify string `json:"cannot_classify"`
 }
 
 type ModbusUdp struct {
@@ -51,13 +54,18 @@ func (g *ModbusUdp) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) err
 	if port_string != "01f6" {
 		return errors.New("ModbusUdp port wrong")
 	}
+
+	sourceport := hex.EncodeToString(data[34:36])
 	// ethernetType := data[12:14]
 
 	modbusInfo := ModbusUdpInfo{
-		ProtId:  binary.BigEndian.Uint16(data[44:46]),
-		TransId: binary.BigEndian.Uint16(data[42:44]),
-		UnitId:  data[48],
-		Len:     binary.BigEndian.Uint16(data[46:48]),
+		ProtId:         binary.BigEndian.Uint16(data[44:46]),
+		TransId:        binary.BigEndian.Uint16(data[42:44]),
+		UnitId:         data[48],
+		Len:            binary.BigEndian.Uint16(data[46:48]),
+		ReferenceNum:   binary.BigEndian.Uint16(data[50:52]),
+		WordCnt:        binary.BigEndian.Uint16(data[52:54]),
+		CannotClassify: sourceport,
 	}
 	// fmt.Println("Port String ", hex.EncodeToString(data[42:44]))
 

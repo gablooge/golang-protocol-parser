@@ -60,6 +60,7 @@ type ModbusTCP struct {
 	ProtocolIdentifier    ModbusProtocol // It is used for intra-system multiplexing
 	Length                uint16         // Number of following bytes (includes 1 byte for UnitIdentifier + Modbus data length
 	UnitIdentifier        uint8          // Identification of a remote slave connected on a serial line or on other buses
+	Data                  []byte
 }
 
 //******************************************************************************
@@ -137,6 +138,7 @@ func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) err
 	// 	return errors.New("ModbusTCP packet with wrong field value (Length)")
 	// }
 	d.UnitIdentifier = uint8(data[6])
+	d.Data = data[62:]
 
 	return nil
 }
