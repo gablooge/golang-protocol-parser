@@ -10,7 +10,6 @@ package main
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 
 	"github.com/google/gopacket"
@@ -29,6 +28,8 @@ import (
 type ModbusProtocol uint16
 
 type FuncCode uint8
+
+const ModbusPort uint16 = 502
 
 // https://www.modbustools.com/modbus.html
 const (
@@ -158,9 +159,9 @@ func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
 // and returns nil.
 // Upon failure, it returns an error (non nil).
 func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	src_port := string(hex.EncodeToString(data[34:(35 + 1)]))
-	dest_port := string(hex.EncodeToString(data[36:(37 + 1)]))
-	if src_port != "01f6" && dest_port != "01f6" {
+	src_port := binary.BigEndian.Uint16(data[34:(35 + 1)])
+	dest_port := binary.BigEndian.Uint16(data[36:(37 + 1)])
+	if src_port != ModbusPort && dest_port != ModbusPort {
 		return errors.New("Invalid ModbusTCP port")
 	}
 
