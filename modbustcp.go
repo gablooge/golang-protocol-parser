@@ -28,6 +28,61 @@ import (
 // ModbusProtocol type
 type ModbusProtocol uint16
 
+type FuncCode uint8
+
+// https://www.modbustools.com/modbus.html
+const (
+	ReadCoils                    FuncCode = 0x01
+	ReadDiscreteInputs           FuncCode = 0x02
+	ReadHoldingRegisters         FuncCode = 0x03
+	ReadInputRegisters           FuncCode = 0x04
+	WriteSingleCoil              FuncCode = 0x05
+	WriteSingleRegisters         FuncCode = 0x06
+	Diagnostics                  FuncCode = 0x08
+	GetCommEventCounter          FuncCode = 0x0B
+	WriteMultipleCoils           FuncCode = 0x0F
+	WriteMultipleRegisters       FuncCode = 0x10
+	ReportServerID               FuncCode = 0x11
+	MaskWriteRegister            FuncCode = 0x16
+	ReadOrWriteMultipleRegisters FuncCode = 0x17
+	ReadDeviceIdentification1    FuncCode = 0x2B
+	ReadDeviceIdentification2    FuncCode = 0x0E
+)
+
+func (fc FuncCode) String() (s string) {
+	switch fc {
+	case ReadCoils:
+		s = "Read Coils"
+	case ReadDiscreteInputs:
+		s = "Read Discrete Inputs"
+	case ReadHoldingRegisters:
+		s = "Read Holding Registers"
+	case ReadInputRegisters:
+		s = "Read Input Registers"
+	case WriteSingleRegisters:
+		s = "Write Single Register"
+	case Diagnostics:
+		s = "Diagnostics"
+	case GetCommEventCounter:
+		s = "Get Comm Event Counter"
+	case WriteMultipleCoils:
+		s = "Write Multiple Coils"
+	case WriteMultipleRegisters:
+		s = "Write Multiple Registers"
+	case ReportServerID:
+		s = "Report Server ID"
+	case MaskWriteRegister:
+		s = "Mask Write Register"
+	case ReadOrWriteMultipleRegisters:
+		s = "Read/Write Multiple Registers"
+	case ReadDeviceIdentification1, ReadDeviceIdentification2:
+		s = "Read Device Identification"
+	default:
+		s = "Unknown"
+	}
+	return
+}
+
 // ModbusProtocol known values.
 const (
 	ModbusProtocolModbus ModbusProtocol = 0
@@ -50,12 +105,11 @@ func (mp ModbusProtocol) String() string {
 // represents in a structured form the MODBUS Application Protocol header (MBAP) record present as the TCP
 // payload in an ModbusTCP TCP packet.
 type ModbusTCPInfo struct {
-	Length         uint16 `json:"length"`
-	UnitIdentifier uint8  `json:"unit_identifier"`
-	FuncCode       uint8  `json:"func_code"`
-	Data           []byte `json:"data"`
+	Length         uint16   `json:"length"`
+	UnitIdentifier uint8    `json:"unit_identifier"`
+	FuncCode       FuncCode `json:"func_code"`
+	Data           []byte   `json:"data"`
 }
-
 type ModbusTCP struct {
 	layers.BaseLayer // Stores the packet bytes and payload (Modbus PDU) bytes .
 
@@ -81,7 +135,6 @@ func (d *ModbusTCP) LayerType() gopacket.LayerType {
 //
 // This function is employed in layertypes.go to register the ModbusTCP layer.
 func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
-
 	// Attempt to decode the byte slice.
 	d := &ModbusTCP{}
 	err := d.DecodeFromBytes(data, p)
@@ -94,7 +147,6 @@ func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
 	p.SetApplicationLayer(d)
 
 	return p.NextDecoder(d.NextLayerType())
-
 }
 
 //******************************************************************************
@@ -106,18 +158,18 @@ func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
 // and returns nil.
 // Upon failure, it returns an error (non nil).
 func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	hex_code_string := string(hex.EncodeToString(data[36:38]))
-	if hex_code_string != "01f6" {
-		return errors.New("ModbusTCP port wrong")
+	src_port := string(hex.EncodeToString(data[34:(35 + 1)]))
+	dest_port := string(hex.EncodeToString(data[36:(37 + 1)]))
+	if src_port != "01f6" && dest_port != "01f6" {
+		return errors.New("Invalid ModbusTCP port")
 	}
 
 	d.BaseLayer = layers.BaseLayer{Contents: data[:13], Payload: data[54:]}
-
-	d.TransactionIdentifier = binary.BigEndian.Uint16(data[53:55])
-	d.ModbusTCPInfo.Length = binary.BigEndian.Uint16(data[58:60])
-	d.ModbusTCPInfo.UnitIdentifier = uint8(data[6])
+	d.TransactionIdentifier = binary.BigEndian.Uint16(data[54:(55 + 1)])
+	d.ModbusTCPInfo.Length = binary.BigEndian.Uint16(data[58:(59 + 1)])
+	d.ModbusTCPInfo.UnitIdentifier = uint8(data[60])
 	d.ModbusTCPInfo.Data = data[62:]
-	d.ModbusTCPInfo.FuncCode = data[61]
+	d.ModbusTCPInfo.FuncCode = FuncCode(data[61])
 
 	return nil
 }
