@@ -70,6 +70,91 @@ func printBLE() {
 	}
 }
 
+func printLorawan() {
+	fmt.Println("===== Welcome LoRawan =====")
+	lorawanFileHandle, err := pcap.OpenOffline("pcaps/lorawan.pcapng")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer lorawanFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(lorawanFileHandle, LayerTypeLorawan)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeLorawan)
+		if layersdata != nil {
+			lorawanLayerData, _ := layersdata.(*Lorawan)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println("lorawan.etherType : ", lorawanLayerData.EthernetType)
+			fmt.Println("lorawan.headerData : ", lorawanLayerData.HeaderData)
+			fmt.Println("lorawan.Info.Port : ", lorawanLayerData.LorawanInfo.FPort)
+			fmt.Println("lorawan.Info.Payload : ", lorawanLayerData.LorawanInfo.FrmPayload)
+		}
+
+	}
+}
+
+func printModbusTcp() {
+	fmt.Println("==== Welcome Modbus TCP ====")
+	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/modbustcp.pcapng")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer modbustcpFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusTCP)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeModbusTCP)
+		if layersdata != nil {
+			modbusLayerData, _ := layersdata.(*ModbusTCP)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.TransactionIdentifier)
+			fmt.Println("modbustcp.ProtocolIdentifier : ", modbusLayerData.ProtocolIdentifier)
+			fmt.Println("modbustcp.ModbusTCPInfo.UnitIdentifier : ", modbusLayerData.ModbusTCPInfo.UnitIdentifier)
+			fmt.Println("modbustcp.ModbusTCPInfo.FuncCode : ", modbusLayerData.ModbusTCPInfo.FuncCode)
+			fmt.Println("modbustcp.ModbusTCPInfo.Data : ", modbusLayerData.ModbusTCPInfo.Data)
+		}
+
+	}
+}
+
+func printModbusUdp() {
+	fmt.Println("==== Welcome Modbus UDP ====")
+	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/mbudp.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer modbustcpFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusUdp)
+
+	i := 0
+	// Loop through packets in file
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeModbusUdp)
+		if layersdata != nil {
+			modbusLayerData, _ := layersdata.(*ModbusUdp)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			// fmt.Println("print ", modbusLayerData.BaseLayer)
+			fmt.Println("modbusudp.TransactionIdentifier : ", modbusLayerData.ModbusUDPInfo.TransId)
+			fmt.Println("modbusudp.ProtocolIdentifier : ", modbusLayerData.ModbusUDPInfo.ProtId)
+			fmt.Println("modbusudp.UnitIdentifier : ", modbusLayerData.ModbusUDPInfo.UnitId)
+			fmt.Println("modbusudp.ReferenceNumber : ", modbusLayerData.ModbusUDPInfo.ReferenceNum)
+			fmt.Println("modbusudp.WordCount : ", modbusLayerData.ModbusUDPInfo.WordCnt)
+			fmt.Println("modbusudp.CannotClassify : ", modbusLayerData.ModbusUDPInfo.CannotClassify)
+		}
+
+	}
+}
+
 func main() {
 	printGoose()
 	printBLE()
@@ -78,5 +163,8 @@ func main() {
 	// TODO: mqtt
 	// TODO: lorawan
 
+	printLorawan()
+	printModbusTcp()
+	printModbusUdp()
 	fmt.Println("======= Done =======")
 }
