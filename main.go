@@ -18,12 +18,12 @@ func printGoose() {
 	}
 	defer gooseFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(gooseFileHandle, LayerTypeGoose)
+	packetSource := gopacket.NewPacketSource(gooseFileHandle, LayerTypeGOOSE)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeGoose)
+		layersdata := packet.Layer(LayerTypeGOOSE)
 		if layersdata != nil {
 			gooseLayerData, _ := layersdata.(*GOOSE)
 			gooseData := gooseLayerData.Info
@@ -48,7 +48,7 @@ func printGoose() {
 func printBLE() {
 	fmt.Println("======= Welcome BLE =======")
 
-	bleFileHandle, err := pcap.OpenOffline("pcaps/blev2.pcap")
+	bleFileHandle, err := pcap.OpenOffline("pcaps/ble.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
