@@ -99,7 +99,7 @@ func printLorawan() {
 
 func printModbusTcp() {
 	fmt.Println("==== Welcome Modbus TCP ====")
-	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/modbustcp.pcapng")
+	modbustcpFileHandle, err := pcap.OpenOffline("pcaps/modbustcp.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -156,15 +156,14 @@ func printModbusUdp() {
 }
 
 func main() {
-	printGoose()
-	printBLE()
-
-	// TODO: modbus
 	// TODO: mqtt
 	// TODO: lorawan
 
+	printGoose()
+	printBLE()
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
+
 	fmt.Println("======= Done =======")
 }
