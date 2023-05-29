@@ -1,11 +1,3 @@
-// Copyright 2018, The GoPacket Authors, All rights reserved.
-//
-// Use of this source code is governed by a BSD-style license
-// that can be found in the LICENSE file in the root of the source
-// tree.
-//
-//******************************************************************************
-
 package main
 
 import (
@@ -16,15 +8,6 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
-//******************************************************************************
-//
-// ModbusTCP Decoding Layer
-// ------------------------------------------
-// This file provides a GoPacket decoding layer for ModbusTCP.
-//
-//******************************************************************************
-
-// ModbusProtocol type
 type ModbusProtocol uint16
 
 type FuncCode uint8
@@ -50,38 +33,33 @@ const (
 	ReadDeviceIdentification2    FuncCode = 0x0E
 )
 
-func (fc FuncCode) String() (s string) {
-	switch fc {
-	case ReadCoils:
-		s = "Read Coils"
-	case ReadDiscreteInputs:
-		s = "Read Discrete Inputs"
-	case ReadHoldingRegisters:
-		s = "Read Holding Registers"
-	case ReadInputRegisters:
-		s = "Read Input Registers"
-	case WriteSingleRegisters:
-		s = "Write Single Register"
-	case Diagnostics:
-		s = "Diagnostics"
-	case GetCommEventCounter:
-		s = "Get Comm Event Counter"
-	case WriteMultipleCoils:
-		s = "Write Multiple Coils"
-	case WriteMultipleRegisters:
-		s = "Write Multiple Registers"
-	case ReportServerID:
-		s = "Report Server ID"
-	case MaskWriteRegister:
-		s = "Mask Write Register"
-	case ReadOrWriteMultipleRegisters:
-		s = "Read/Write Multiple Registers"
-	case ReadDeviceIdentification1, ReadDeviceIdentification2:
-		s = "Read Device Identification"
-	default:
-		s = "Unknown"
+var ErrInvalidModbusPort = errors.New("invalid modbus port")
+
+func (fc FuncCode) String() string {
+	funcCodes := map[FuncCode]string{
+		ReadCoils:                    "Read Coils",
+		ReadDiscreteInputs:           "Read Discrete Inputs",
+		ReadHoldingRegisters:         "Read Holding Registers",
+		ReadInputRegisters:           "Read Input Registers",
+		WriteSingleRegisters:         "Write Single Register",
+		Diagnostics:                  "Diagnostics",
+		GetCommEventCounter:          "Get Comm Event Counter",
+		WriteSingleCoil:              "Write Single Coil",
+		WriteMultipleCoils:           "Write Multiple Coils",
+		WriteMultipleRegisters:       "Write Multiple Registers",
+		ReportServerID:               "Report Server ID",
+		MaskWriteRegister:            "Mask Write Register",
+		ReadOrWriteMultipleRegisters: "Read/Write Multiple Registers",
+		ReadDeviceIdentification1:    "Read Device Identification",
+		ReadDeviceIdentification2:    "Read Device Identification",
 	}
-	return
+	fcString, ok := funcCodes[fc]
+
+	if ok {
+		return fcString
+	}
+
+	return "Unknown"
 }
 
 // ModbusProtocol known values.
@@ -97,8 +75,6 @@ func (mp ModbusProtocol) String() string {
 		return "Modbus"
 	}
 }
-
-//******************************************************************************
 
 // ModbusTCP Type
 // --------
@@ -119,14 +95,10 @@ type ModbusTCP struct {
 	ModbusTCPInfo         ModbusTCPInfo
 }
 
-//******************************************************************************
-
 // LayerType returns the layer type of the ModbusTCP object, which is LayerTypeModbusTCP.
 func (d *ModbusTCP) LayerType() gopacket.LayerType {
 	return LayerTypeModbusTCP
 }
-
-//******************************************************************************
 
 // decodeModbusTCP analyses a byte slice and attempts to decode it as an ModbusTCP
 // record of a TCP packet.
@@ -135,22 +107,22 @@ func (d *ModbusTCP) LayerType() gopacket.LayerType {
 // If it fails, it returns an error (non nil).
 //
 // This function is employed in layertypes.go to register the ModbusTCP layer.
-func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
+func decodeModbusTCP(data []byte, gpb gopacket.PacketBuilder) error {
 	// Attempt to decode the byte slice.
-	d := &ModbusTCP{}
-	err := d.DecodeFromBytes(data, p)
+	var layer ModbusTCP
+
+	err := layer.DecodeFromBytes(data, gpb)
 	if err != nil {
 		return err
 	}
+
 	// If the decoding worked, add the layer to the packet and set it
 	// as the application layer too, if there isn't already one.
-	p.AddLayer(d)
-	p.SetApplicationLayer(d)
+	gpb.AddLayer(&layer)
+	gpb.SetApplicationLayer(&layer)
 
-	return p.NextDecoder(d.NextLayerType())
+	return gpb.NextDecoder(layer.NextLayerType())
 }
-
-//******************************************************************************
 
 // DecodeFromBytes analyses a byte slice and attempts to decode it as an ModbusTCP
 // record of a TCP packet.
@@ -159,37 +131,32 @@ func decodeModbusTCP(data []byte, p gopacket.PacketBuilder) error {
 // and returns nil.
 // Upon failure, it returns an error (non nil).
 func (d *ModbusTCP) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
-	src_port := binary.BigEndian.Uint16(data[34:(35 + 1)])
-	dest_port := binary.BigEndian.Uint16(data[36:(37 + 1)])
-	if src_port != ModbusPort && dest_port != ModbusPort {
-		return errors.New("invalid modbustcp port")
+	srcPort := binary.BigEndian.Uint16(data[34 : 35+1])
+	destPort := binary.BigEndian.Uint16(data[36 : 37+1])
+
+	if srcPort != ModbusPort && destPort != ModbusPort {
+		df.SetTruncated()
+
+		return ErrInvalidModbusPort
 	}
 
 	d.BaseLayer = layers.BaseLayer{Contents: data[:13], Payload: data[54:]}
-	d.TransactionIdentifier = binary.BigEndian.Uint16(data[54:(55 + 1)])
-	d.ModbusTCPInfo.Length = binary.BigEndian.Uint16(data[58:(59 + 1)])
-	d.ModbusTCPInfo.UnitIdentifier = uint8(data[60])
+	d.TransactionIdentifier = binary.BigEndian.Uint16(data[54 : 55+1])
+	d.ModbusTCPInfo.Length = binary.BigEndian.Uint16(data[58 : 59+1])
+	d.ModbusTCPInfo.UnitIdentifier = data[60]
 	d.ModbusTCPInfo.Data = data[62:]
 	d.ModbusTCPInfo.FuncCode = FuncCode(data[61])
 
 	return nil
 }
 
-//******************************************************************************
-
 // NextLayerType returns the layer type of the ModbusTCP payload, which is LayerTypePayload.
 func (d *ModbusTCP) NextLayerType() gopacket.LayerType {
 	return gopacket.LayerTypePayload
 }
 
-//******************************************************************************
-
-// Payload returns Modbus Protocol Data Unit (PDU) composed by Function Code and Data, it is carried within ModbusTCP packets
+// Payload returns Modbus Protocol Data Unit (PDU) composed by Function Code and Data,
+// it is carried within ModbusTCP packets.
 func (d *ModbusTCP) Payload() []byte {
 	return d.BaseLayer.Payload
-}
-
-// CanDecode returns the set of layer types that this DecodingLayer can decode
-func (s *ModbusTCP) CanDecode() gopacket.LayerClass {
-	return LayerTypeModbusTCP
 }
