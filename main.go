@@ -195,6 +195,6 @@ func main() {
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
-
+	printStream()
 	fmt.Println("======= Done =======")
 }
