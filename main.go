@@ -174,7 +174,7 @@ func printStream() {
 	configHandle_logger := logger.Named("handle")
 
 	assembler := reassembly.NewAssembler(ReassemblyPool)
-	handle, err := pcap.OpenOffline("pcap/http-simple.pcap")
+	handle, err := pcap.OpenOffline("pcap/tpkt_only_one.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -184,6 +184,7 @@ func printStream() {
 	for packet := range packetSource.Packets() {
 		handleReassembly(configHandle_logger, assembler, packet)
 	}
+	assembler.FlushAll()
 }
 
 func main() {

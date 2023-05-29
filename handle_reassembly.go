@@ -105,8 +105,7 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	// parsing when a protocol is unknown, only start parsing when the packet
 	// contents look like a certain protocol.
 	if t.stream == nil {
-
-		print("ok")
+		println("payload :", payload)
 		t.stream = detectPayload(payload)
 		if t.stream != nil {
 			t.stream.SetLogger(t.logger)
