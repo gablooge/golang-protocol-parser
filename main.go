@@ -48,7 +48,7 @@ func printGoose() {
 func printBLE() {
 	fmt.Println("======= Welcome BLE =======")
 
-	bleFileHandle, err := pcap.OpenOffline("pcaps/blev2.pcap")
+	bleFileHandle, err := pcap.OpenOffline("pcaps/ble.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -155,9 +155,32 @@ func printModbusUdp() {
 	}
 }
 
+func printIEC() {
+	fmt.Println("==== Welcom IEC ====")
+	iecFileHandle, err := pcap.OpenOffline("pcaps/iec104.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer iecFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(iecFileHandle, LayerTypeIEC)
+
+	i := 0
+
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeIEC)
+		if layersdata != nil {
+			iecLayerData, _ := layersdata.(*IEC)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println(iecLayerData)
+		}
+	}
+}
+
 func main() {
 	printGoose()
-	printBLE()
+	// printBLE()
 
 	// TODO: modbus
 	// TODO: mqtt
@@ -166,5 +189,6 @@ func main() {
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
+	printIEC()
 	fmt.Println("======= Done =======")
 }

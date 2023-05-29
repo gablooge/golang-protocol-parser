@@ -97,6 +97,14 @@ func bytesToInt(bytes []byte) int {
 	return result
 }
 
+func bytesToTime(bytes []byte) time.Time {
+	tUint32 := binary.BigEndian.Uint32(bytes)
+	i, _ := strconv.ParseInt(fmt.Sprint(tUint32), 10, 64)
+	tString := time.Unix(i, 0)
+
+	return tString
+}
+
 // decodeHTTP decodes the byte slice into a GOOSE type.
 func decodeGOOSE(data []byte, packetBuilder gopacket.PacketBuilder) error {
 	var layer GOOSE
@@ -112,11 +120,11 @@ func decodeGOOSE(data []byte, packetBuilder gopacket.PacketBuilder) error {
 }
 
 // DecodeFromBytes decodes the slice into the GOOSE struct.
-func (g *GOOSE) DecodeFromBytes(data []byte, decodeFeedback gopacket.DecodeFeedback) error {
+func (g *GOOSE) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	ethernetType := binary.BigEndian.Uint16(data[12:14])
 
 	if ethernetType != GOOSEEthernetType {
-		decodeFeedback.SetTruncated()
+		df.SetTruncated()
 
 		return ErrEthTypeNotGOOSE
 	}
@@ -131,41 +139,27 @@ func (g *GOOSE) DecodeFromBytes(data []byte, decodeFeedback gopacket.DecodeFeedb
 	payloadsPdu := data[pduIdx:]
 	dataLength := uint32(bytesToInt(payloads[2:4]))
 	lastPosition := 0
-
 	parsedBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEPDUTag))
 	gocbRef := string(parsedBytes)
-
 	timeallowedtoliveBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEDatSet))
 	timeallowedtolive := uint32(bytesToInt(timeallowedtoliveBytes))
-
 	dataSetBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEGoID))
 	dataSet := string(dataSetBytes)
-
 	goIDBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSET))
 	goID := string(goIDBytes)
-
 	tBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEStNum))
-	tUint32 := binary.BigEndian.Uint32(tBytes)
-	i, _ := strconv.ParseInt(fmt.Sprint(tUint32), 10, 64)
-	tString := time.Unix(i, 0)
-
+	gooseT := bytesToTime(tBytes)
 	stNumBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSESqNum))
 	stNum := uint32(bytesToInt(stNumBytes))
-
 	sqNumBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSESimulation))
 	sqNum := uint32(bytesToInt(sqNumBytes))
-
 	simulationNumBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEConfRef))
 	simulation := bytesToInt(simulationNumBytes) == 1
-
 	confRevBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSENdsCom))
 	confRev := uint32(bytesToInt(confRevBytes))
-
 	ndsComBytes, lastPosition := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSENumDatSetEntries))
 	ndsCom := bytesToInt(ndsComBytes) == 1
-
 	NumDatSetEntriesBytes, _ := parseGOOSEData(payloadsPdu, lastPosition, byte(GOOSEAllData))
-
 	gooseInfo := GOOSEInfo{
 		AppID:             hex.EncodeToString(payloads[:2]),
 		Length:            dataLength,
@@ -173,7 +167,7 @@ func (g *GOOSE) DecodeFromBytes(data []byte, decodeFeedback gopacket.DecodeFeedb
 		Timeallowedtolive: timeallowedtolive,
 		DatSet:            dataSet,
 		GoID:              goID,
-		T:                 tString,
+		T:                 gooseT,
 		StNum:             stNum,
 		SqNum:             sqNum,
 		Simulation:        simulation,
@@ -181,7 +175,6 @@ func (g *GOOSE) DecodeFromBytes(data []byte, decodeFeedback gopacket.DecodeFeedb
 		NdsCom:            ndsCom,
 		NumDatSetEntries:  uint32(bytesToInt(NumDatSetEntriesBytes)),
 	}
-
 	g.Payload = payloads
 	g.Info = gooseInfo
 	g.HeaderData = data[:14]
