@@ -13,15 +13,17 @@ import (
 //nolint:exhaustruct // Allow creating zero-value structs
 func detectPayload(payload []byte) Stream {
 	// Prefix-based streams
-	// if DetectTLS(payload) {
-	// 	return &TLS{}
-	// }
+	if DetectTLS(payload) {
+		return &TLS{}
+	}
 	// Line-based streams (like HTTP/1)
 	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
 	rows := bytes.Split(payload, []byte("\r\n"))
 	if len(rows) > 0 {
 		if DetectHTTP(rows[0]) {
 			return &HTTP{}
+		} else if DetectSSH(rows) {
+			return &SSH{}
 		}
 	}
 
