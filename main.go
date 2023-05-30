@@ -9,6 +9,9 @@ import (
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/reassembly"
 	"go.uber.org/zap"
+
+	"samsulhadi.com/go-packet-parser/layers"
+	"samsulhadi.com/go-packet-parser/streams"
 )
 
 func printGoose() {
@@ -20,14 +23,14 @@ func printGoose() {
 	}
 	defer gooseFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(gooseFileHandle, LayerTypeGOOSE)
+	packetSource := gopacket.NewPacketSource(gooseFileHandle, layers.LayerTypeGOOSE)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeGOOSE)
+		layersdata := packet.Layer(layers.LayerTypeGOOSE)
 		if layersdata != nil {
-			gooseLayerData, _ := layersdata.(*GOOSE)
+			gooseLayerData, _ := layersdata.(*layers.GOOSE)
 			gooseData := gooseLayerData.Info
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
@@ -56,14 +59,14 @@ func printBLE() {
 	}
 	defer bleFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(bleFileHandle, LayerTypeBLE)
+	packetSource := gopacket.NewPacketSource(bleFileHandle, layers.LayerTypeBLE)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeBLE)
+		layersdata := packet.Layer(layers.LayerTypeBLE)
 		if layersdata != nil {
-			bleLayerData, _ := layersdata.(*BLE)
+			bleLayerData, _ := layersdata.(*layers.BLE)
 			// bleData := bleLayerData.Info
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
@@ -80,14 +83,14 @@ func printLorawan() {
 	}
 	defer lorawanFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(lorawanFileHandle, LayerTypeLorawan)
+	packetSource := gopacket.NewPacketSource(lorawanFileHandle, layers.LayerTypeLorawan)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeLorawan)
+		layersdata := packet.Layer(layers.LayerTypeLorawan)
 		if layersdata != nil {
-			lorawanLayerData, _ := layersdata.(*Lorawan)
+			lorawanLayerData, _ := layersdata.(*layers.Lorawan)
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			fmt.Println("lorawan.etherType : ", lorawanLayerData.EthernetType)
@@ -107,14 +110,14 @@ func printModbusTcp() {
 	}
 	defer modbustcpFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusTCP)
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, layers.LayerTypeModbusTCP)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeModbusTCP)
+		layersdata := packet.Layer(layers.LayerTypeModbusTCP)
 		if layersdata != nil {
-			modbusLayerData, _ := layersdata.(*ModbusTCP)
+			modbusLayerData, _ := layersdata.(*layers.ModbusTCP)
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			fmt.Println("modbustcp.TransactionIdentifier : ", modbusLayerData.TransactionIdentifier)
@@ -135,14 +138,14 @@ func printModbusUdp() {
 	}
 	defer modbustcpFileHandle.Close()
 
-	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, LayerTypeModbusUdp)
+	packetSource := gopacket.NewPacketSource(modbustcpFileHandle, layers.LayerTypeModbusUdp)
 
 	i := 0
 	// Loop through packets in file
 	for packet := range packetSource.Packets() {
-		layersdata := packet.Layer(LayerTypeModbusUdp)
+		layersdata := packet.Layer(layers.LayerTypeModbusUdp)
 		if layersdata != nil {
-			modbusLayerData, _ := layersdata.(*ModbusUdp)
+			modbusLayerData, _ := layersdata.(*layers.ModbusUdp)
 			i = i + 1
 			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
 			// fmt.Println("print ", modbusLayerData.BaseLayer)
@@ -170,11 +173,11 @@ func printStream() {
 	loggerConfig.EncoderConfig = zap.NewDevelopmentEncoderConfig()
 
 	logger, _ := loggerConfig.Build()
-	ReassemblyPool := newReassemblyPool(logger.Named("reassembly"))
+	ReassemblyPool := streams.NewReassemblyPool(logger.Named("reassembly"))
 	configHandle_logger := logger.Named("handle")
 
 	assembler := reassembly.NewAssembler(ReassemblyPool)
-	handle, err := pcap.OpenOffline("pcap/tpkt_only_one.pcap")
+	handle, err := pcap.OpenOffline("pcaps/http.pcap")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -182,7 +185,7 @@ func printStream() {
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
-		handleReassembly(configHandle_logger, assembler, packet)
+		streams.HandleReassembly(configHandle_logger, assembler, packet)
 	}
 	assembler.FlushAll()
 }

@@ -1,5 +1,5 @@
 //nolint:revive,varnamelen // Temporarily disable unused parameter and parameter name warnings
-package main
+package streams
 
 import (
 	"bytes"
@@ -200,7 +200,7 @@ func (factory *tcpStreamFactory) New(
 	}
 }
 
-func newReassemblyPool(logger *zap.Logger) *reassembly.StreamPool {
+func NewReassemblyPool(logger *zap.Logger) *reassembly.StreamPool {
 	return reassembly.NewStreamPool(&tcpStreamFactory{
 		logger: logger,
 	})
@@ -217,7 +217,7 @@ func (c *assemblerContext) GetCaptureInfo() gopacket.CaptureInfo {
 	return c.captureInfo
 }
 
-func handleReassembly(
+func HandleReassembly(
 	logger *zap.Logger,
 	assembler *reassembly.Assembler,
 	packet gopacket.Packet,

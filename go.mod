@@ -1,4 +1,4 @@
-module packet_tracer
+module samsulhadi.com/go-packet-parser
 
 go 1.20
 
