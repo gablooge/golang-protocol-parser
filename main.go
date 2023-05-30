@@ -157,6 +157,29 @@ func printModbusUdp() {
 	}
 }
 
+func printIEC() {
+	fmt.Println("==== Welcom IEC ====")
+	iecFileHandle, err := pcap.OpenOffline("pcaps/iec104.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer iecFileHandle.Close()
+
+	packetSource := gopacket.NewPacketSource(iecFileHandle, LayerTypeIEC)
+
+	i := 0
+
+	for packet := range packetSource.Packets() {
+		layersdata := packet.Layer(LayerTypeIEC)
+		if layersdata != nil {
+			iecLayerData, _ := layersdata.(*IEC)
+			i = i + 1
+			fmt.Println("======= Packet " + strconv.Itoa(i) + " =======")
+			fmt.Println(iecLayerData)
+		}
+	}
+}
+
 func printStream() {
 	logLevel := zap.LevelFlag(
 		"log-level",
@@ -196,6 +219,7 @@ func main() {
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
+	printIEC()
 	printStream()
 	fmt.Println("======= Done =======")
 }

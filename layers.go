@@ -9,4 +9,5 @@ var (
 	LayerTypeCan       = gopacket.RegisterLayerType(1005, gopacket.LayerTypeMetadata{Name: "CAN", Decoder: gopacket.DecodeFunc(decodeCan)})
 	LayerTypeModbusTCP = gopacket.RegisterLayerType(1007, gopacket.LayerTypeMetadata{Name: "MODBUSTCP", Decoder: gopacket.DecodeFunc(decodeModbusTCP)})
 	LayerTypeModbusUdp = gopacket.RegisterLayerType(1006, gopacket.LayerTypeMetadata{Name: "MODBUSUDP", Decoder: gopacket.DecodeFunc(decodeModbusUdp)})
+	LayerTypeIEC       = gopacket.RegisterLayerType(1008, gopacket.LayerTypeMetadata{Name: "IEC", Decoder: gopacket.DecodeFunc(decodeIEC)})
 )
