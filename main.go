@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/reassembly"
+	"go.uber.org/zap"
 )
 
 func printGoose() {
@@ -155,6 +157,36 @@ func printModbusUdp() {
 	}
 }
 
+func printStream() {
+	logLevel := zap.LevelFlag(
+		"log-level",
+		zap.InfoLevel,
+		"set the global minimum logging level",
+	)
+	// set up loggers
+	loggerConfig := zap.NewProductionConfig()
+	loggerConfig.Level.SetLevel(*logLevel)
+	loggerConfig.Encoding = "console"
+	loggerConfig.EncoderConfig = zap.NewDevelopmentEncoderConfig()
+
+	logger, _ := loggerConfig.Build()
+	ReassemblyPool := newReassemblyPool(logger.Named("reassembly"))
+	configHandle_logger := logger.Named("handle")
+
+	assembler := reassembly.NewAssembler(ReassemblyPool)
+	handle, err := pcap.OpenOffline("pcap/tpkt_only_one.pcap")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer handle.Close()
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		handleReassembly(configHandle_logger, assembler, packet)
+	}
+	assembler.FlushAll()
+}
+
 func main() {
 	// TODO: mqtt
 	// TODO: lorawan
@@ -164,6 +196,6 @@ func main() {
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
-
+	printStream()
 	fmt.Println("======= Done =======")
 }
