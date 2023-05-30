@@ -160,7 +160,7 @@ func printModbusUdp() {
 	}
 }
 
-func printStream() {
+func printStream(pcalFile string) {
 	logLevel := zap.LevelFlag(
 		"log-level",
 		zap.InfoLevel,
@@ -177,7 +177,7 @@ func printStream() {
 	configHandle_logger := logger.Named("handle")
 
 	assembler := reassembly.NewAssembler(ReassemblyPool)
-	handle, err := pcap.OpenOffline("pcaps/http.pcap")
+	handle, err := pcap.OpenOffline(pcalFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -199,6 +199,6 @@ func main() {
 	printLorawan()
 	printModbusTcp()
 	printModbusUdp()
-	printStream()
+	printStream("pcaps/http.pcap")
 	fmt.Println("======= Done =======")
 }
