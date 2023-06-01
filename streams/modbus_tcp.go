@@ -152,14 +152,24 @@ func (mdb *ModbusTCP) Setup() error {
 	return nil
 }
 
-func DetectModbusTCP(payload []byte) bool {
-	// fmt.Println("=========DetectModbusTCP===========")
-	// if hex.EncodeToString(payload[0:2]) == "39ac" {
-	// 	fmt.Printf("==> %x\n", payload)
-	// }
+func bytesToInt(bytes []byte) int {
+	var result int
+	for _, b := range bytes {
+		result = (result << 8) + int(b)
+	}
 
+	return result
+}
+
+func DetectModbusTCP(payload []byte) bool {
 	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
 	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
-
-	return minimumLength || maximumLength
+	if minimumLength || maximumLength {
+		modbus_header := payload[:7]
+		modbus_body_length := modbus_header[4:6]
+		if bytesToInt(modbus_body_length) == len(payload[7:])+1 {
+			return true
+		}
+	}
+	return false
 }
