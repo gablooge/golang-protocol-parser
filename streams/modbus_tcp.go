@@ -167,7 +167,7 @@ func DetectModbusTCP(payload []byte) bool {
 	if minimumLength || maximumLength {
 		modbus_header := payload[:7]
 		modbus_body_length := modbus_header[4:6]
-		if bytesToInt(modbus_body_length) == len(payload[7:])+1 {
+		if (bytesToInt(modbus_body_length) == len(payload[7:])+1) && FuncCode(bytesToInt(payload[7:8])).String() != "Unknown" {
 			return true
 		}
 	}
