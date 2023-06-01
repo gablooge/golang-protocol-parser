@@ -13,8 +13,10 @@ import (
 type FuncCode uint8
 
 const (
-	ModbusPort                uint16 = 502
-	ModbusMinimumPacketLength int    = 7
+	modbusTCPPort                     uint16 = 502
+	mbapRecordSizeInBytes             int    = 7
+	modbusPDUMinimumRecordSizeInBytes int    = 2
+	modbusPDUMaximumRecordSizeInBytes int    = 253
 )
 
 // https://www.modbustools.com/modbus.html
@@ -35,8 +37,6 @@ const (
 	ReadDeviceIdentification1    FuncCode = 0x2B
 	ReadDeviceIdentification2    FuncCode = 0x0E
 )
-
-var ErrInvalidModbusPort = errors.New("invalid modbus port")
 
 func (fc FuncCode) String() string {
 	funcCodes := map[FuncCode]string{
@@ -133,5 +133,8 @@ func DetectModbusTCP(payload []byte) bool {
 	fmt.Println("=========DetectModbusTCP===========")
 	fmt.Printf("%x\n", payload)
 
-	return len(payload) >= ModbusMinimumPacketLength
+	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
+	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
+
+	return minimumLength || maximumLength
 }
