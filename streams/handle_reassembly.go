@@ -19,7 +19,6 @@ func detectPayload(payload []byte) Stream {
 		return &ModbusTCP{}
 	}
 
-	// fmt.Println("testt ", payload)
 	// Line-based streams (like HTTP/1)
 	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
 	rows := bytes.Split(payload, []byte("\r\n"))

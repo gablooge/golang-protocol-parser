@@ -1,7 +1,7 @@
 package streams
 
 import (
-	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -96,25 +96,8 @@ func (mdb *ModbusTCP) Setup() error {
 		defer client.Close()
 
 		for {
-			buf := new(bytes.Buffer)
-			_, err := buf.ReadFrom(client)
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
-				mdb.L.Warn("ModbusTCP: request parse failed", zap.Error(err))
-
-				continue
-			}
-		}
-	}()
-
-	go func() {
-		defer server.Close()
-
-		for {
-			buf := new(bytes.Buffer)
-			_, err := buf.ReadFrom(server)
+			var buff [mbapRecordSizeInBytes + modbusPDUMaximumRecordSizeInBytes]byte
+			_, err := io.ReadFull(client, buff[:])
 
 			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 				break
@@ -123,6 +106,32 @@ func (mdb *ModbusTCP) Setup() error {
 
 				continue
 			}
+			if hex.EncodeToString(buff[0:2]) == "39ac" {
+				fmt.Printf("client ==> %x\n", buff)
+			}
+
+		}
+	}()
+
+	go func() {
+		defer server.Close()
+
+		for {
+			var buff [mbapRecordSizeInBytes + modbusPDUMaximumRecordSizeInBytes]byte
+			_, err := io.ReadFull(server, buff[:])
+
+			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
+				break
+			} else if err != nil {
+				mdb.L.Warn("ModbusTCP: response parse failed", zap.Error(err))
+
+				continue
+			}
+
+			if hex.EncodeToString(buff[0:2]) == "39ac" {
+				fmt.Printf("server ==> %x\n", buff)
+			}
+
 		}
 	}()
 
@@ -131,7 +140,9 @@ func (mdb *ModbusTCP) Setup() error {
 
 func DetectModbusTCP(payload []byte) bool {
 	fmt.Println("=========DetectModbusTCP===========")
-	fmt.Printf("%x\n", payload)
+	if hex.EncodeToString(payload[0:2]) == "39ac" {
+		fmt.Printf("==> %x\n", payload)
+	}
 
 	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
 	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
