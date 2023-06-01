@@ -56,7 +56,17 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 
 	if _, ok := stream.(*HTTP); ok {
 		return []ApplicationProtocol{ApplicationProtocolHTTP}
-	} else if _, ok := stream.(*DNP3); ok {
+	}
+
+	if _, ok := stream.(*SSH); ok {
+		return []ApplicationProtocol{ApplicationProtocolSSH}
+	}
+
+	if _, ok := stream.(*TLS); ok {
+		return []ApplicationProtocol{ApplicationProtocolTLS}
+	}
+
+	if _, ok := stream.(*DNP3); ok {
 		return []ApplicationProtocol{ApplicationProtocolDNP3}
 	}
 
