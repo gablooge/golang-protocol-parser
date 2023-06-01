@@ -197,10 +197,9 @@ func main() {
 	// printGoose()
 	// printBLE()
 	// printLorawan()
-	// printModbusTcp()
 	// printModbusUdp()
 	// printStream("pcaps/http.pcap")
-	printStream("pcaps/modbus.pcapng")
+	printStream("pcaps/modbustcp-1.pcap")
 
 	// TODO: add printStream("pcaps/tpkt.pcap")
 	// TODO: add printStream("pcaps/copt.pcap")
