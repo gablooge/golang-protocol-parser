@@ -16,6 +16,7 @@ const (
 	mbapRecordSizeInBytes             int    = 7
 	modbusPDUMinimumRecordSizeInBytes int    = 2
 	modbusPDUMaximumRecordSizeInBytes int    = 253
+	LeftShiftingBits                  int    = 8
 )
 
 // https://www.modbustools.com/modbus.html
@@ -155,7 +156,7 @@ func (mdb *ModbusTCP) Setup() error {
 func bytesToInt(bytes []byte) int {
 	var result int
 	for _, b := range bytes {
-		result = (result << 8) + int(b)
+		result = (result << LeftShiftingBits) + int(b)
 	}
 
 	return result
@@ -164,12 +165,15 @@ func bytesToInt(bytes []byte) int {
 func DetectModbusTCP(payload []byte) bool {
 	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
 	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
+
 	if minimumLength || maximumLength {
-		modbus_header := payload[:7]
-		modbus_body_length := modbus_header[4:6]
-		if (bytesToInt(modbus_body_length) == len(payload[7:])+1) && FuncCode(bytesToInt(payload[7:8])).String() != "Unknown" {
+		modbusHeader := payload[:7]
+		modbusBodyLength := modbusHeader[4:6]
+
+		if (bytesToInt(modbusBodyLength) == len(payload[7:])+1) && FuncCode(bytesToInt(payload[7:8])).String() != "Unknown" {
 			return true
 		}
 	}
+
 	return false
 }
