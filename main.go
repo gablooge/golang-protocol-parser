@@ -163,7 +163,7 @@ func printModbusUdp() {
 func printStream(pcalFile string) {
 	logLevel := zap.LevelFlag(
 		"log-level",
-		zap.InfoLevel,
+		zap.DebugLevel,
 		"set the global minimum logging level",
 	)
 	// set up loggers

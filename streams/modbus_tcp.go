@@ -1,9 +1,8 @@
 package streams
 
 import (
-	"encoding/hex"
+	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 
 	"go.uber.org/zap"
@@ -66,11 +65,13 @@ func (fc FuncCode) String() string {
 }
 
 type ModbusTCPInfo struct {
-	TransactionIdentifier uint16   `json:"transaction_identifier"`
-	Length                uint16   `json:"length"`
-	UnitIdentifier        uint8    `json:"unit_identifier"`
-	FuncCode              FuncCode `json:"func_code"`
-	Data                  []byte   `json:"data"`
+	TransactionIdentifier uint16 `json:"transaction_identifier"`
+	ProtocolIdentifier    uint16 `json:"protocol_identifier"`
+	Length                uint16 `json:"length"`
+	UnitIdentifier        int    `json:"unit_identifier"`
+
+	FuncCode FuncCode `json:"func_code"`
+	Data     []byte   `json:"data"`
 }
 
 type ModbusTCP struct {
@@ -106,9 +107,6 @@ func (mdb *ModbusTCP) Setup() error {
 
 				continue
 			}
-			if hex.EncodeToString(buff[0:2]) == "39ac" {
-				fmt.Printf("client ==> %x\n", buff)
-			}
 
 		}
 	}()
@@ -117,21 +115,37 @@ func (mdb *ModbusTCP) Setup() error {
 		defer server.Close()
 
 		for {
-			var buff [mbapRecordSizeInBytes + modbusPDUMaximumRecordSizeInBytes]byte
-			_, err := io.ReadFull(server, buff[:])
+			var header [mbapRecordSizeInBytes]byte
 
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
+			_, err := io.ReadFull(server, header[:])
+			if err != nil {
 				mdb.L.Warn("ModbusTCP: response parse failed", zap.Error(err))
 
-				continue
+				return
 			}
 
-			if hex.EncodeToString(buff[0:2]) == "39ac" {
-				fmt.Printf("server ==> %x\n", buff)
-			}
+			transID := binary.BigEndian.Uint16(header[0:2])
+			protID := binary.BigEndian.Uint16(header[2:4])
+			pduLen := binary.BigEndian.Uint16(header[4:6])
+			unitID := int(header[6])
 
+			if transID > 0 && pduLen >= uint16(modbusPDUMinimumRecordSizeInBytes) && pduLen <= uint16(modbusPDUMaximumRecordSizeInBytes) {
+				modbusInfo := ModbusTCPInfo{
+					TransactionIdentifier: transID,
+					ProtocolIdentifier:    protID,
+					Length:                pduLen,
+					UnitIdentifier:        unitID,
+				}
+
+				mdb.ModbusTCPInfo = modbusInfo
+
+				mdb.L.Debug("ModbusTCP: response",
+					zap.Uint16("transaction_identifier", transID),
+					zap.Uint16("protocol_identifier", protID),
+					zap.Uint16("length", pduLen),
+					zap.Int("unit_identifier", unitID),
+				)
+			}
 		}
 	}()
 
@@ -139,10 +153,10 @@ func (mdb *ModbusTCP) Setup() error {
 }
 
 func DetectModbusTCP(payload []byte) bool {
-	fmt.Println("=========DetectModbusTCP===========")
-	if hex.EncodeToString(payload[0:2]) == "39ac" {
-		fmt.Printf("==> %x\n", payload)
-	}
+	// fmt.Println("=========DetectModbusTCP===========")
+	// if hex.EncodeToString(payload[0:2]) == "39ac" {
+	// 	fmt.Printf("==> %x\n", payload)
+	// }
 
 	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
 	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
