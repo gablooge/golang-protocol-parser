@@ -10,11 +10,12 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type ModbusProtocol uint16
-
 type FuncCode uint8
 
-const ModbusPort uint16 = 502
+const (
+	ModbusPort                uint16 = 502
+	ModbusMinimumPacketLength int    = 7
+)
 
 // https://www.modbustools.com/modbus.html
 const (
@@ -64,11 +65,6 @@ func (fc FuncCode) String() string {
 	return "Unknown"
 }
 
-// ModbusTCP Type
-// --------
-// Type ModbusTCP implements the DecodingLayer interface. Each ModbusTCP object
-// represents in a structured form the MODBUS Application Protocol header (MBAP) record present as the TCP
-// payload in an ModbusTCP TCP packet.
 type ModbusTCPInfo struct {
 	TransactionIdentifier uint16   `json:"transaction_identifier"`
 	Length                uint16   `json:"length"`
@@ -137,5 +133,5 @@ func DetectModbusTCP(payload []byte) bool {
 	fmt.Println("=========DetectModbusTCP===========")
 	fmt.Printf("%x\n", payload)
 
-	return len(payload) >= 7
+	return len(payload) >= ModbusMinimumPacketLength
 }
