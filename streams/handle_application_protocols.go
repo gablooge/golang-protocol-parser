@@ -12,7 +12,7 @@ const (
 	ApplicationProtocolGOOSE  ApplicationProtocol = "goose"
 	ApplicationProtocolBLE    ApplicationProtocol = "ble"
 	ApplicationProtocolModbus ApplicationProtocol = "modbus"
-	// ApplicationProtocolDNP3   ApplicationProtocol = "dnp3"
+	ApplicationProtocolDNP3   ApplicationProtocol = "dnp3"
 	// ApplicationProtocolCAN    ApplicationProtocol = "can"
 	// Streams
 	ApplicationProtocolHTTP ApplicationProtocol = "http"
@@ -56,6 +56,8 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 
 	if _, ok := stream.(*HTTP); ok {
 		return []ApplicationProtocol{ApplicationProtocolHTTP}
+	} else if _, ok := stream.(*DNP3); ok {
+		return []ApplicationProtocol{ApplicationProtocolDNP3}
 	}
 
 	return nil

@@ -15,6 +15,8 @@ func detectPayload(payload []byte) Stream {
 	// Prefix-based streams
 	if DetectTLS(payload) {
 		return &TLS{}
+	} else if DetectDNP3(payload) {
+		return &DNP3{}
 	}
 	// Line-based streams (like HTTP/1)
 	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
