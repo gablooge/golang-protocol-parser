@@ -18,6 +18,7 @@ const (
 	ApplicationProtocolHTTP ApplicationProtocol = "http"
 	ApplicationProtocolSSH  ApplicationProtocol = "ssh"
 	ApplicationProtocolTLS  ApplicationProtocol = "tls"
+	ApplicationProtocolTPKT ApplicationProtocol = "tpkt"
 	// ApplicationProtocolFTP  ApplicationProtocol = "ftp"
 	// ApplicationProtocolMQTT  ApplicationProtocol = "mqtt"
 )
@@ -56,6 +57,9 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 
 	if _, ok := stream.(*HTTP); ok {
 		return []ApplicationProtocol{ApplicationProtocolHTTP}
+	}
+	if _, ok := stream.(*TPKT); ok {
+		return []ApplicationProtocol{ApplicationProtocolTPKT}
 	}
 
 	return nil

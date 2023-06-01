@@ -15,6 +15,8 @@ func detectPayload(payload []byte) Stream {
 	// Prefix-based streams
 	if DetectTLS(payload) {
 		return &TLS{}
+	} else if DetectTPKT(payload) {
+		return &TPKT{}
 	}
 	// Line-based streams (like HTTP/1)
 	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
@@ -107,7 +109,6 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	// parsing when a protocol is unknown, only start parsing when the packet
 	// contents look like a certain protocol.
 	if t.stream == nil {
-		println("payload :", payload)
 		t.stream = detectPayload(payload)
 		if t.stream != nil {
 			t.stream.SetLogger(t.logger)
