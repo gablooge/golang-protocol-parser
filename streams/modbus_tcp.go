@@ -71,8 +71,8 @@ type ModbusTCPInfo struct {
 	Length                uint16 `json:"length"`
 	UnitIdentifier        int    `json:"unit_identifier"`
 
-	FuncCode FuncCode `json:"func_code"`
-	Data     []byte   `json:"data"`
+	FunctionCode FuncCode `json:"function_code"`
+	// Data         []byte   `json:"data"`
 }
 
 type ModbusTCP struct {
@@ -86,11 +86,20 @@ func (mdb *ModbusTCP) Name() string {
 	return "Modbus TCP/IP"
 }
 
-func (mdb *ModbusTCP) MarshalLogObject(_ zapcore.ObjectEncoder) error {
+func (mdb *ModbusTCP) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddUint16("transaction_identifier", mdb.ModbusTCPInfo.TransactionIdentifier)
+	enc.AddUint16("protocol_identifier", mdb.ModbusTCPInfo.ProtocolIdentifier)
+	enc.AddUint16("length", mdb.ModbusTCPInfo.Length)
+	enc.AddInt("unit_identifier", mdb.ModbusTCPInfo.UnitIdentifier)
+	enc.AddInt("unit_identifier", mdb.ModbusTCPInfo.UnitIdentifier)
+	enc.AddString("function_code", mdb.ModbusTCPInfo.FunctionCode.String())
+
 	return nil
 }
 
 // Setup implements the Stream interface.
+//
+//nolint:funlen // TODO: create parse modbus info separately.
 func (mdb *ModbusTCP) Setup() error {
 	client, server := mdb.Readers()
 
@@ -104,11 +113,10 @@ func (mdb *ModbusTCP) Setup() error {
 			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
 				break
 			} else if err != nil {
-				mdb.L.Warn("ModbusTCP: response parse failed", zap.Error(err))
+				mdb.L.Warn("ModbusTCP: request parse failed", zap.Error(err))
 
 				continue
 			}
-
 		}
 	}()
 
@@ -126,16 +134,38 @@ func (mdb *ModbusTCP) Setup() error {
 			}
 
 			transID := binary.BigEndian.Uint16(header[0:2])
-			protID := binary.BigEndian.Uint16(header[2:4])
 			pduLen := binary.BigEndian.Uint16(header[4:6])
-			unitID := int(header[6])
 
-			if transID > 0 && pduLen >= uint16(modbusPDUMinimumRecordSizeInBytes) && pduLen <= uint16(modbusPDUMaximumRecordSizeInBytes) {
+			isLengthValid := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes && int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
+			// if hex.EncodeToString(header[0:2]) == "39ac" {
+			// 	fmt.Printf("==> %x\n", header)
+
+			if transID > 0 && isLengthValid {
+				pduData := make([]byte, pduLen)
+
+				_, err = io.ReadFull(server, pduData)
+
+				funcCode := int(pduData[0])
+
+				if err != nil {
+					// Incomplete message or connection closed.
+					return
+				}
+
+				if FuncCode(funcCode).String() == "Unknown" {
+					// Incomplete message or connection closed.
+					return
+				}
+
+				protID := binary.BigEndian.Uint16(header[2:4])
+				unitID := int(header[6])
+
 				modbusInfo := ModbusTCPInfo{
 					TransactionIdentifier: transID,
 					ProtocolIdentifier:    protID,
 					Length:                pduLen,
 					UnitIdentifier:        unitID,
+					FunctionCode:          FuncCode(funcCode),
 				}
 
 				mdb.ModbusTCPInfo = modbusInfo
@@ -145,35 +175,29 @@ func (mdb *ModbusTCP) Setup() error {
 					zap.Uint16("protocol_identifier", protID),
 					zap.Uint16("length", pduLen),
 					zap.Int("unit_identifier", unitID),
+					zap.Int("function_code", funcCode),
 				)
 			}
 		}
+		// }
 	}()
 
 	return nil
 }
 
-func bytesToInt(bytes []byte) int {
-	var result int
-	for _, b := range bytes {
-		result = (result << LeftShiftingBits) + int(b)
-	}
-
-	return result
-}
-
 func DetectModbusTCP(payload []byte) bool {
 	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
-	maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
+	// maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
 
-	if minimumLength || maximumLength {
-		modbusHeader := payload[:7]
-		modbusBodyLength := modbusHeader[4:6]
+	// if minimumLength || maximumLength {
+	// 	modbusHeader := payload[:7]
+	// 	modbusBodyLength := modbusHeader[4:6]
 
-		if (bytesToInt(modbusBodyLength) == len(payload[7:])+1) && FuncCode(bytesToInt(payload[7:8])).String() != "Unknown" {
-			return true
-		}
-	}
+	// 	if (bytesToInt(modbusBodyLength) == len(payload[7:])+1) &&
+	// 		FuncCode(int(payload[7:8])).String() != "Unknown" {
+	// 		return true
+	// 	}
+	// }
 
-	return false
+	return minimumLength
 }
