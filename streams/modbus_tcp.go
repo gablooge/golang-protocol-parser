@@ -153,7 +153,7 @@ func (mdb *ModbusTCP) Setup() error {
 				}
 
 				if FuncCode(funcCode).String() == "Unknown" {
-					// Incomplete message or connection closed.
+					// Unknown function code.
 					return
 				}
 
