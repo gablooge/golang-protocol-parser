@@ -17,6 +17,8 @@ type (
 	SecondaryServiceFunction uint8
 )
 
+const LinkLayerLength = 10
+
 const (
 	ResetOfRemoteLink   PrimaryServiceFunction = 0
 	ResetOfUserProcess  PrimaryServiceFunction = 1
@@ -81,7 +83,7 @@ type DataLinkLayer struct {
 
 	DataFlowControl bool
 
-	FunctionCode uint8
+	FunctionCode int
 
 	Destination uint16
 	Source      uint16
@@ -139,7 +141,37 @@ func (d *DNP3) Name() string {
 	return "DNP 3.0"
 }
 
-func (d *DNP3) MarshalLogObject(_ zapcore.ObjectEncoder) error {
+func ByteToBits(b byte) []int {
+	bits := make([]int, 8)
+
+	for i := 0; i < 8; i++ {
+		bit := (b >> uint(i)) & 1
+		bits[7-i] = int(bit)
+	}
+
+	return bits
+}
+
+func BinaryToDecimal(binary []int) int {
+	decimal := 0
+	for i := len(binary) - 1; i >= 0; i-- {
+		decimal += binary[i] << (len(binary) - 1 - i)
+	}
+
+	return decimal
+}
+
+func (d *DNP3) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("Data_Link_Layer_StartBytes", d.LinkHeader.StartBytes)
+	enc.AddUint16("Data_Link_Layer_Length", d.LinkHeader.Length)
+	enc.AddUint16("Data_Link_Layer_Destination", d.LinkHeader.Destination)
+	enc.AddUint16("Data_Link_Layer_Source", d.LinkHeader.Source)
+	enc.AddBool("PhysicalTransmissionDirection", d.LinkHeader.PhysicalTransmissionDirection)
+	enc.AddBool("PrimaryMessage", d.LinkHeader.PrimaryMessage)
+	enc.AddBool("FrameCountBit", d.LinkHeader.FrameCountBit)
+	enc.AddBool("FrameCountBitValid", d.LinkHeader.FrameCountBitValid)
+	enc.AddString("Control_Function_Code", d.LinkHeader.ServiceFunction())
+
 	return nil
 }
 
@@ -168,16 +200,44 @@ func (d *DNP3) Setup() error {
 		defer server.Close()
 
 		for {
-			buf := new(bytes.Buffer)
-			_, err := buf.ReadFrom(server)
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
+			var linkLayer [LinkLayerLength]byte
+			_, err := io.ReadFull(server, linkLayer[:])
+			if err != nil {
 				d.L.Warn("DNP3: response parse failed", zap.Error(err))
-
-				continue
+				return
 			}
+			startBytes := linkLayer[0:2]
+			dataLinkLength := int(linkLayer[2])
+			controlByte := linkLayer[3]
+			control := ByteToBits(controlByte)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
+			dataLinkDestination := bytesToInt(linkLayer[4:5])
+			dataLinkSource := bytesToInt(linkLayer[6:7])
+			dataLinkLayer := DataLinkLayer{
+				StartBytes:  string(startBytes), // fix: soon
+				Length:      uint16(dataLinkLength),
+				Destination: uint16(dataLinkDestination),
+				Source:      uint16(dataLinkSource),
+				// control
+				PhysicalTransmissionDirection: control[0] == 1,
+				PrimaryMessage:                control[1] == 1,
+				FrameCountBit:                 control[2] == 1,
+				FrameCountBitValid:            control[3] == 1,
+				FunctionCode:                  BinaryToDecimal(control[4:]),
+			}
+			d.LinkHeader = dataLinkLayer
+
+			println("===xxxxxxxxxxx===")
+			d.L.Debug("TPKT: response",
+				zap.String("Data_Link_Layer_StartBytes", dataLinkLayer.StartBytes),
+				zap.Uint16("Data_Link_Layer_Length", dataLinkLayer.Length),
+				zap.Uint16("Data_Link_Layer_Destination", dataLinkLayer.Destination),
+				zap.Uint16("Data_Link_Layer_Source", dataLinkLayer.Source),
+			)
+
 		}
 	}()
 
@@ -186,7 +246,7 @@ func (d *DNP3) Setup() error {
 
 func DetectDNP3(payload []byte) bool {
 	fmt.Println("=========DetectDNP3===========")
-	fmt.Printf("%x\n", payload)
+	// fmt.Printf("%x\n", payload)
 
 	startBytes := hex.EncodeToString(payload[0:2])
 
