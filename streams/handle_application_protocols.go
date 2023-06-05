@@ -58,6 +58,15 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 	if _, ok := stream.(*HTTP); ok {
 		return []ApplicationProtocol{ApplicationProtocolHTTP}
 	}
+
+	if _, ok := stream.(*SSH); ok {
+		return []ApplicationProtocol{ApplicationProtocolSSH}
+	}
+
+	if _, ok := stream.(*TLS); ok {
+		return []ApplicationProtocol{ApplicationProtocolTLS}
+	}
+
 	if _, ok := stream.(*TPKT); ok {
 		return []ApplicationProtocol{ApplicationProtocolTPKT}
 	}

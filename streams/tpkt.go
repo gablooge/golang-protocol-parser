@@ -17,6 +17,8 @@ const (
 	maximumPKTLength  int = 65535
 )
 
+const UnknownString string = "Unknown"
+
 // https://github.com/SCADACS/snap7/blob/master/src/core/s7_isotcp.h#LL79-L92
 // https://github.com/boundary/wireshark/blob/master/epan/dissectors/packet-ositp.c#L114-L147
 type CotpPduType int
@@ -53,7 +55,7 @@ func (pduType CotpPduType) String() string {
 		return pduString
 	}
 
-	return "Unknown"
+	return UnknownString
 }
 
 // https://www.rfc-editor.org/rfc/rfc983
@@ -76,7 +78,7 @@ func (pc ParameterCode) String() string {
 		return pcString
 	}
 
-	return "Unknown"
+	return UnknownString
 }
 
 type CRorCCTPDU struct {
@@ -92,23 +94,24 @@ type CRorCCTPDU struct {
 }
 
 type COPT struct {
-	Length  int         `json:"cotp.li"`
-	PDUType CotpPduType `json:"cotp.type"`
+	Length  int         `json:"cotp.li"`   //nolint: tagliatelle // Follow wireshark.
+	PDUType CotpPduType `json:"cotp.type"` //nolint: tagliatelle // Follow wireshark.
 
 	// For CC & CR
 	// https://www.rfc-editor.org/rfc/rfc983
-	CRorCCData CRorCCTPDU
+	CRorCCData CRorCCTPDU `exhaustruct:"optional"`
 }
+
 type TPKT struct {
 	BaseStream
 	ReaderStream
 
-	Version  int    `json:"tpkt.version"`
-	Length   uint16 `json:"tpkt.length"`
-	COPTInfo COPT
+	Version  int    `json:"tpkt.version"` //nolint: tagliatelle // Follow wireshark.
+	Length   uint16 `json:"tpkt.length"`  //nolint: tagliatelle // Follow wireshark.
+	COPTInfo COPT   `exhaustruct:"optional"`
 }
 
-func (t *TPKT) Name() string {
+func (tpkt *TPKT) Name() string {
 	return "TPKT"
 }
 
@@ -123,6 +126,8 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 }
 
 // Setup implements the Stream interface.
+//
+//nolint:funlen,gocognit,cyclop // TODO: create parse COPT info separately.
 func (tpkt *TPKT) Setup() error {
 	client, server := tpkt.Readers()
 	client.Close()
@@ -159,6 +164,7 @@ func (tpkt *TPKT) Setup() error {
 				continue
 			}
 
+			//nolint: nestif // TODO: create parse COPT info separately.
 			if len(serverTPKTHeader) == minimumTPKTLength {
 				if hex.EncodeToString(serverTPKTHeader[0:2]) == "0300" {
 					tpktVersion := int(serverTPKTHeader[0])
@@ -168,7 +174,7 @@ func (tpkt *TPKT) Setup() error {
 					coptLength := int(serverTPKTHeader[4])
 					cotpPduType := CotpPduType(int(serverTPKTHeader[5]))
 
-					if cotpPduType.String() == "Unknown" {
+					if cotpPduType.String() == UnknownString {
 						// Unknown COTP PDU Type
 						return
 					}
@@ -206,12 +212,14 @@ func (tpkt *TPKT) Setup() error {
 
 func DetectTPKT(payload []byte) bool {
 	if len(payload) > minimumTPKTLength {
-		// check TPKT v3 and and has COPT Type
+		// check TPKT v3 and has COPT Type
 		tpktVersion := payload[0:2]
 		coptPduType := payload[5]
-		if hex.EncodeToString(tpktVersion) == "0300" && CotpPduType(coptPduType).String() != "Unknown" {
+
+		if hex.EncodeToString(tpktVersion) == "0300" && CotpPduType(coptPduType).String() != UnknownString {
 			return true
 		}
 	}
+
 	return false
 }
