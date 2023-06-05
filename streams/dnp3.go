@@ -217,7 +217,7 @@ func (d *DNP3) Setup() error {
 			dataLinkDestination := bytesToInt(linkLayer[4:5])
 			dataLinkSource := bytesToInt(linkLayer[6:7])
 			dataLinkLayer := DataLinkLayer{
-				StartBytes:  string(startBytes), // fix: soon
+				StartBytes:  fmt.Sprintf("0x%X", startBytes), // fix: soon
 				Length:      uint16(dataLinkLength),
 				Destination: uint16(dataLinkDestination),
 				Source:      uint16(dataLinkSource),
@@ -229,8 +229,11 @@ func (d *DNP3) Setup() error {
 				FunctionCode:                  BinaryToDecimal(control[4:]),
 			}
 			d.LinkHeader = dataLinkLayer
+			// println("xxx", startBytes)
+			// hexString := fmt.Sprintf("0x%X", startBytes)
 
-			println("===xxxxxxxxxxx===")
+			// fmt.Printf("%x\n", hexString)
+
 			d.L.Debug("TPKT: response",
 				zap.String("Data_Link_Layer_StartBytes", dataLinkLayer.StartBytes),
 				zap.Uint16("Data_Link_Layer_Length", dataLinkLayer.Length),
