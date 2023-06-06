@@ -17,8 +17,6 @@ const (
 	maximumPKTLength  int = 65535
 )
 
-const UnknownString string = "Unknown"
-
 // https://github.com/SCADACS/snap7/blob/master/src/core/s7_isotcp.h#LL79-L92
 // https://github.com/boundary/wireshark/blob/master/epan/dissectors/packet-ositp.c#L114-L147
 type CotpPduType int
