@@ -2,7 +2,7 @@ package streams
 
 import (
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io"
 
 	"go.uber.org/zap"
@@ -16,10 +16,7 @@ const (
 	mbapRecordSizeInBytes             int    = 7
 	modbusPDUMinimumRecordSizeInBytes int    = 2
 	modbusPDUMaximumRecordSizeInBytes int    = 253
-	LeftShiftingBits                  int    = 8
 )
-
-const UnknownString string = "Unknown"
 
 // https://www.modbustools.com/modbus.html
 const (
@@ -64,7 +61,7 @@ func (fc FuncCode) String() string {
 		return fcString
 	}
 
-	return UnknownString
+	return fmt.Sprintf("FuncCode(%d)", fc)
 }
 
 type ModbusTCPInfo struct {
@@ -109,14 +106,10 @@ func (mdb *ModbusTCP) Setup() error {
 
 		for {
 			var buff [mbapRecordSizeInBytes + modbusPDUMaximumRecordSizeInBytes]byte
+
 			_, err := io.ReadFull(client, buff[:])
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
-				mdb.L.Warn("ModbusTCP: request parse failed", zap.Error(err))
-
-				continue
+			if err != nil {
+				return
 			}
 		}
 	}()
@@ -128,54 +121,47 @@ func (mdb *ModbusTCP) Setup() error {
 			var header [mbapRecordSizeInBytes + 1]byte
 
 			_, err := io.ReadFull(server, header[:])
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
-				mdb.L.Warn("ModbusTCP: response parse failed", zap.Error(err))
-
-				continue
+			if err != nil {
+				return
 			}
 
-			if len(header) == mbapRecordSizeInBytes+1 {
-				transID := binary.BigEndian.Uint16(header[0:2])
-				pduLen := binary.BigEndian.Uint16(header[4:6])
-				funcCode := int(header[7])
+			transID := binary.BigEndian.Uint16(header[0:2])
+			pduLen := binary.BigEndian.Uint16(header[4:6])
+			funcCode := int(header[7])
 
-				pduLenMin := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes
-				pduLenMax := int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
+			pduLenMin := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes
+			pduLenMax := int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
 
-				if transID > 0 && pduLenMin && pduLenMax && FuncCode(funcCode).String() != UnknownString {
-					pduData := make([]byte, pduLen)
+			if transID > 0 && pduLenMin && pduLenMax {
+				pduData := make([]byte, pduLen)
 
-					_, err = io.ReadFull(server, pduData)
+				_, err = io.ReadFull(server, pduData)
 
-					if err != nil {
-						// Incomplete message or connection closed.
-						return
-					}
-
-					protID := binary.BigEndian.Uint16(header[2:4])
-					unitID := int(header[6])
-
-					modbusInfo := ModbusTCPInfo{
-						TransactionIdentifier: transID,
-						ProtocolIdentifier:    protID,
-						Length:                pduLen,
-						UnitIdentifier:        unitID,
-						FunctionCode:          FuncCode(funcCode),
-					}
-
-					mdb.ModbusTCPInfo = modbusInfo
-
-					mdb.L.Debug("ModbusTCP: response",
-						zap.Uint16("mbtcp.trans_id", transID),
-						zap.Uint16("mbtcp.prot_id", protID),
-						zap.Uint16("mbtcp.len", pduLen),
-						zap.Int("mbtcp.unit_id", unitID),
-						zap.Int("modbus.func_code", funcCode),
-					)
+				if err != nil {
+					// Incomplete message or connection closed.
+					return
 				}
+
+				protID := binary.BigEndian.Uint16(header[2:4])
+				unitID := int(header[6])
+
+				modbusInfo := ModbusTCPInfo{
+					TransactionIdentifier: transID,
+					ProtocolIdentifier:    protID,
+					Length:                pduLen,
+					UnitIdentifier:        unitID,
+					FunctionCode:          FuncCode(funcCode),
+				}
+
+				mdb.ModbusTCPInfo = modbusInfo
+
+				mdb.L.Debug("ModbusTCP: response",
+					zap.Uint16("mbtcp.trans_id", transID),
+					zap.Uint16("mbtcp.prot_id", protID),
+					zap.Uint16("mbtcp.len", pduLen),
+					zap.Int("mbtcp.unit_id", unitID),
+					zap.Int("modbus.func_code", funcCode),
+				)
 			}
 		}
 	}()
@@ -194,7 +180,7 @@ func DetectModbusTCP(payload []byte) bool {
 		pduLenMin := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes
 		pduLenMax := int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
 
-		if transID > 0 && pduLenMin && pduLenMax && FuncCode(int(payload[7])).String() != UnknownString {
+		if transID > 0 && pduLenMin && pduLenMax {
 			return true
 		}
 	}
