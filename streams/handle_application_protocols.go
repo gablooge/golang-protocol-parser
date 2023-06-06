@@ -15,9 +15,10 @@ const (
 	ApplicationProtocolDNP3   ApplicationProtocol = "dnp3"
 	// ApplicationProtocolCAN    ApplicationProtocol = "can"
 	// Streams
-	ApplicationProtocolHTTP ApplicationProtocol = "http"
-	ApplicationProtocolSSH  ApplicationProtocol = "ssh"
-	ApplicationProtocolTLS  ApplicationProtocol = "tls"
+	ApplicationProtocolHTTP      ApplicationProtocol = "http"
+	ApplicationProtocolSSH       ApplicationProtocol = "ssh"
+	ApplicationProtocolTLS       ApplicationProtocol = "tls"
+	ApplicationProtocolModbusTCP ApplicationProtocol = "modbustcp"
 	// ApplicationProtocolFTP  ApplicationProtocol = "ftp"
 	// ApplicationProtocolMQTT  ApplicationProtocol = "mqtt"
 )
@@ -28,6 +29,7 @@ var ApplicationProtocolAll = []ApplicationProtocol{
 	ApplicationProtocolHTTP,
 	ApplicationProtocolSSH,
 	ApplicationProtocolTLS,
+	ApplicationProtocolModbusTCP,
 }
 
 // ApplicationProtocolSlice attaches the methods of Interface to []string, sorting in increasing order.
@@ -68,6 +70,10 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 
 	if _, ok := stream.(*DNP3); ok {
 		return []ApplicationProtocol{ApplicationProtocolDNP3}
+	}
+
+	if _, ok := stream.(*ModbusTCP); ok {
+		return []ApplicationProtocol{ApplicationProtocolModbusTCP}
 	}
 
 	return nil

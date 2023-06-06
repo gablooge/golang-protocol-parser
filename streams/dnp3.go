@@ -2,6 +2,7 @@ package streams
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -206,7 +207,7 @@ func (d *DNP3) Setup() error {
 				d.L.Warn("DNP3: response parse failed", zap.Error(err))
 				return
 			}
-			startBytes := linkLayer[0:2]
+			startBytes := hex.EncodeToString(linkLayer[0:2])
 			dataLinkLength := int(linkLayer[2])
 			controlByte := linkLayer[3]
 			control := ByteToBits(controlByte)
@@ -214,10 +215,10 @@ func (d *DNP3) Setup() error {
 				fmt.Println("Error:", err)
 				return
 			}
-			dataLinkDestination := bytesToInt(linkLayer[4:5])
-			dataLinkSource := bytesToInt(linkLayer[6:7])
+			dataLinkDestination := binary.BigEndian.Uint16(linkLayer[4:6])
+			dataLinkSource := binary.BigEndian.Uint16(linkLayer[6:8])
 			dataLinkLayer := DataLinkLayer{
-				StartBytes:  fmt.Sprintf("0x%X", startBytes), // fix: soon
+				StartBytes:  startBytes,
 				Length:      uint16(dataLinkLength),
 				Destination: uint16(dataLinkDestination),
 				Source:      uint16(dataLinkSource),
@@ -229,10 +230,6 @@ func (d *DNP3) Setup() error {
 				FunctionCode:                  BinaryToDecimal(control[4:]),
 			}
 			d.LinkHeader = dataLinkLayer
-			// println("xxx", startBytes)
-			// hexString := fmt.Sprintf("0x%X", startBytes)
-
-			// fmt.Printf("%x\n", hexString)
 
 			d.L.Debug("TPKT: response",
 				zap.String("Data_Link_Layer_StartBytes", dataLinkLayer.StartBytes),
@@ -248,9 +245,6 @@ func (d *DNP3) Setup() error {
 }
 
 func DetectDNP3(payload []byte) bool {
-	fmt.Println("=========DetectDNP3===========")
-	// fmt.Printf("%x\n", payload)
-
 	startBytes := hex.EncodeToString(payload[0:2])
 
 	return len(payload) >= 10 && startBytes == "0564"
