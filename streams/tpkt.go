@@ -3,6 +3,7 @@ package streams
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -84,15 +85,17 @@ func (pc ParameterCode) String() string {
 }
 
 type CRorCCTPDU struct {
-	DestinationReference uint16
-	SourceReference      uint16
-	Class                int
-	ParameterCode1       ParameterCode
-	ParameterLength1     int
-	SourceTSAP           uint16
-	ParameterCode2       ParameterCode
-	ParameterLength2     int
-	DestinationTSAP      uint16
+	DestinationReference  string
+	SourceReference       string
+	Class                 int
+	ExtendedFormat        bool
+	NoExplicitFlowControl bool
+	ParameterCode1        ParameterCode
+	ParameterLength1      int
+	SourceTSAP            string
+	ParameterCode2        ParameterCode
+	ParameterLength2      int
+	DestinationTSAP       string
 }
 
 type COTP struct {
@@ -123,8 +126,41 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 
 	enc.AddInt("cotp.li", tpkt.COTPInfo.Length)
 	enc.AddString("cotp.type", tpkt.COTPInfo.PDUType.String())
-
+	switch tpkt.COTPInfo.PDUType {
+	case CCConnectConfirm, CRConnectRequest:
+		enc.AddString("cotp.DestinationReference", tpkt.COTPInfo.CRorCCData.DestinationReference)
+		enc.AddString("cotp.SourceReference", tpkt.COTPInfo.CRorCCData.SourceReference)
+		enc.AddInt("cotp.Class", tpkt.COTPInfo.CRorCCData.Class)
+		enc.AddBool("cotp.ExtendedFormat", tpkt.COTPInfo.CRorCCData.ExtendedFormat)
+		enc.AddBool("cotp.NoExplicitFlowControl", tpkt.COTPInfo.CRorCCData.NoExplicitFlowControl)
+		enc.AddString("cotp.ParameterCode1", tpkt.COTPInfo.CRorCCData.ParameterCode1.String())
+		enc.AddInt("cotp.ParameterLength1", tpkt.COTPInfo.CRorCCData.ParameterLength1)
+		enc.AddString("cotp.SourceTSAP", tpkt.COTPInfo.CRorCCData.SourceTSAP)
+		enc.AddString("cotp.ParameterCode2", tpkt.COTPInfo.CRorCCData.ParameterCode2.String())
+		enc.AddInt("cotp.ParameterLength2", tpkt.COTPInfo.CRorCCData.ParameterLength2)
+		enc.AddString("cotp.DestinationTSAP", tpkt.COTPInfo.CRorCCData.DestinationTSAP)
+	}
 	return nil
+}
+
+func ByteToBits(b byte) []int {
+	bits := make([]int, 8)
+
+	for i := 0; i < 8; i++ {
+		bit := (b >> uint(i)) & 1
+		bits[7-i] = int(bit)
+	}
+
+	return bits
+}
+
+func BinaryToDecimal(binary []int) int {
+	decimal := 0
+	for i := len(binary) - 1; i >= 0; i-- {
+		decimal += binary[i] << (len(binary) - 1 - i)
+	}
+
+	return decimal
 }
 
 // Setup implements the Stream interface.
@@ -132,7 +168,6 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 //nolint:funlen // TODO: create parse COTP info separately.
 func (tpkt *TPKT) Setup() error {
 	client, server := tpkt.Readers()
-	client.Close()
 
 	go func() {
 		defer client.Close()
@@ -180,7 +215,7 @@ func (tpkt *TPKT) Setup() error {
 					return
 				}
 
-				cotpData := make([]byte, cotpLength)
+				cotpData := make([]byte, cotpLength-1)
 
 				_, err = io.ReadFull(server, cotpData)
 
@@ -189,17 +224,44 @@ func (tpkt *TPKT) Setup() error {
 					return
 				}
 
-				cotp := COTP{
-					Length:  cotpLength,
-					PDUType: cotpPduType,
+				cotp := &COTP{}
+				cotp.Length = cotpLength
+				cotp.PDUType = cotpPduType
+
+				switch cotpPduType {
+				case CCConnectConfirm, CRConnectRequest:
+					destinationReference := fmt.Sprintf("0x%02X", cotpData[:2])
+					sourceReference := fmt.Sprintf("0x%02X", cotpData[2:4])
+					class_extendedFormat_NoExplicitFlowControl := ByteToBits(cotpData[4])
+					class := class_extendedFormat_NoExplicitFlowControl[:4]
+					extendedFormat := class_extendedFormat_NoExplicitFlowControl[6] == 1
+					noExplicitFlowControl := class_extendedFormat_NoExplicitFlowControl[7] == 1
+
+					parameterCode1 := ParameterCode(cotpData[5])
+					parameterLength1 := int(cotpData[6])
+					sourceTSAP := hex.EncodeToString(cotpData[7:9])
+					parameterCode2 := ParameterCode(cotpData[9])
+					parameterLength2 := int(cotpData[10])
+					destinationTSAP := hex.EncodeToString(cotpData[11:13])
+					//
+					cotp.CRorCCData.DestinationReference = destinationReference
+					cotp.CRorCCData.SourceReference = sourceReference
+					cotp.CRorCCData.Class = BinaryToDecimal(class)
+					cotp.CRorCCData.ExtendedFormat = extendedFormat
+					cotp.CRorCCData.NoExplicitFlowControl = noExplicitFlowControl
+					cotp.CRorCCData.ParameterCode1 = parameterCode1
+					cotp.CRorCCData.ParameterLength1 = parameterLength1
+					cotp.CRorCCData.SourceTSAP = sourceTSAP
+					cotp.CRorCCData.ParameterCode2 = parameterCode2
+					cotp.CRorCCData.ParameterLength2 = parameterLength2
+					cotp.CRorCCData.DestinationTSAP = destinationTSAP
 				}
-				tpkt.COTPInfo = cotp
+				tpkt.COTPInfo = *cotp
 
 				tpkt.L.Debug("TPKT: response",
 					zap.Int("tpkt.version", tpktVersion),
 					zap.Uint16("tpkt.length", tpkt.Length),
 					zap.Uint16("tpkt.length", tpkt.Length),
-
 					zap.Int("cotp.li", tpkt.COTPInfo.Length),
 					zap.String("cotp.type", cotp.PDUType.String()),
 				)
