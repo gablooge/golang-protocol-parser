@@ -10,27 +10,38 @@ import (
 	"go.uber.org/zap"
 )
 
+// detectInfo is all the available info required for detection.
+type detectInfo struct {
+	clientPort layers.TCPPort
+	serverPort layers.TCPPort
+
+	direction reassembly.TCPFlowDirection
+
+	payload []byte
+}
+
 //nolint:exhaustruct // Allow creating zero-value structs
-func detectPayload(payload []byte) Stream {
+func detect(info detectInfo) Stream {
 	// Prefix-based streams
-	switch {
-	case DetectTLS(payload):
+	if DetectTLS(info.payload) {
 		return &TLS{}
-	case DetectModbusTCP(payload):
-		return &ModbusTCP{}
-	case DetectTPKT(payload):
+	} else if DetectTPKT(info.payload) {
 		return &TPKT{}
 	}
 
 	// Line-based streams (like HTTP/1)
-	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
-	rows := bytes.Split(payload, []byte("\r\n"))
+	rows := bytes.Split(info.payload, []byte("\r\n"))
 	if len(rows) > 0 {
 		if DetectHTTP(rows[0]) {
 			return &HTTP{}
 		} else if DetectSSH(rows) {
 			return &SSH{}
 		}
+	}
+
+	// Port-based streams
+	if DetectModbusTCP(info.serverPort) {
+		return &ModbusTCP{}
 	}
 
 	return nil
@@ -106,6 +117,8 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	dir, _, _, _ := sg.Info() //nolint:dogsled // We only need direction information
 	payload := sg.Fetch(length)
 
+	t.logger.Debug("ReassembledSG", zap.Int("length", length), zap.Binary("payload", payload))
+
 	// In this function, we can begin looking at application data sent over the
 	// TCP stream.
 
@@ -113,7 +126,16 @@ func (t *tcpStream) ReassembledSG(sg reassembly.ScatterGather, ac reassembly.Ass
 	// parsing when a protocol is unknown, only start parsing when the packet
 	// contents look like a certain protocol.
 	if t.stream == nil {
-		t.stream = detectPayload(payload)
+		detectPorts := getDetectPorts(ac, dir)
+		detectInfo := detectInfo{
+			clientPort: detectPorts.clientPort,
+			serverPort: detectPorts.serverPort,
+			direction:  dir,
+			payload:    payload,
+		}
+
+		t.stream = detect(detectInfo)
+
 		if t.stream != nil {
 			t.stream.SetLogger(t.logger)
 
@@ -166,6 +188,27 @@ func (t *tcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	return true
 }
 
+type detectPorts struct {
+	clientPort layers.TCPPort
+	serverPort layers.TCPPort
+}
+
+// getDetectPorts gets the server and client ports from the assemblerContext.
+func getDetectPorts(ac reassembly.AssemblerContext, dir reassembly.TCPFlowDirection) detectPorts {
+	actx, ok := ac.(*assemblerContext)
+	if !ok {
+		return detectPorts{0, 0}
+	}
+
+	if dir == reassembly.TCPDirClientToServer {
+		return detectPorts{actx.srcPort, actx.dstPort}
+	} else if dir == reassembly.TCPDirServerToClient {
+		return detectPorts{actx.dstPort, actx.srcPort}
+	}
+
+	return detectPorts{0, 0}
+}
+
 // updateResponse updates the assemblerContext with processed data.
 func updateResponse(ac reassembly.AssemblerContext, stream Stream) {
 	if stream == nil {
@@ -215,6 +258,9 @@ func NewReassemblyPool(logger *zap.Logger) *reassembly.StreamPool {
 
 type assemblerContext struct {
 	captureInfo gopacket.CaptureInfo
+	// Additional metadata for Detect*
+	srcPort layers.TCPPort
+	dstPort layers.TCPPort
 	// Assembler data to return
 	applicationProtocols []ApplicationProtocol
 	stream               Stream
@@ -257,6 +303,8 @@ func HandleReassembly(
 	// Set up assembler context
 	actx := &assemblerContext{
 		captureInfo:          packet.Metadata().CaptureInfo,
+		srcPort:              tcp.SrcPort,
+		dstPort:              tcp.DstPort,
 		applicationProtocols: nil,
 		stream:               nil,
 	}

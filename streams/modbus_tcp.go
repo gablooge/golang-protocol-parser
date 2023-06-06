@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/google/gopacket/layers"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-type FuncCode uint8
+type FuncCode byte
 
 const (
 	modbusTCPPort                     uint16 = 502
@@ -61,7 +62,7 @@ func (fc FuncCode) String() string {
 		return fcString
 	}
 
-	return fmt.Sprintf("FuncCode(%d)", fc)
+	return fmt.Sprintf("FuncCode[%x]", byte(fc))
 }
 
 type ModbusTCPInfo struct {
@@ -127,7 +128,7 @@ func (mdb *ModbusTCP) Setup() error {
 
 			transID := binary.BigEndian.Uint16(header[0:2])
 			pduLen := binary.BigEndian.Uint16(header[4:6])
-			funcCode := int(header[7])
+			funcCode := FuncCode(header[7])
 
 			pduLenMin := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes
 			pduLenMax := int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
@@ -150,7 +151,7 @@ func (mdb *ModbusTCP) Setup() error {
 					ProtocolIdentifier:    protID,
 					Length:                pduLen,
 					UnitIdentifier:        unitID,
-					FunctionCode:          FuncCode(funcCode),
+					FunctionCode:          funcCode,
 				}
 
 				mdb.ModbusTCPInfo = modbusInfo
@@ -160,7 +161,7 @@ func (mdb *ModbusTCP) Setup() error {
 					zap.Uint16("mbtcp.prot_id", protID),
 					zap.Uint16("mbtcp.len", pduLen),
 					zap.Int("mbtcp.unit_id", unitID),
-					zap.Int("modbus.func_code", funcCode),
+					zap.Stringer("modbus.func_code", funcCode),
 				)
 			}
 		}
@@ -169,21 +170,7 @@ func (mdb *ModbusTCP) Setup() error {
 	return nil
 }
 
-func DetectModbusTCP(payload []byte) bool {
-	minimumLength := len(payload) >= mbapRecordSizeInBytes+modbusPDUMinimumRecordSizeInBytes
-	// maximumLength := len(payload) <= mbapRecordSizeInBytes+modbusPDUMaximumRecordSizeInBytes
-
-	if minimumLength {
-		transID := binary.BigEndian.Uint16(payload[0:2])
-		pduLen := binary.BigEndian.Uint16(payload[4:6])
-
-		pduLenMin := int(pduLen) >= modbusPDUMinimumRecordSizeInBytes
-		pduLenMax := int(pduLen) <= modbusPDUMaximumRecordSizeInBytes
-
-		if transID > 0 && pduLenMin && pduLenMax {
-			return true
-		}
-	}
-
-	return false
+func DetectModbusTCP(serverPort layers.TCPPort) bool {
+	// TODO(ambrose): Should we detect using payload?
+	return serverPort == layers.TCPPort(modbusTCPPort)
 }
