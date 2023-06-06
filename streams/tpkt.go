@@ -203,7 +203,7 @@ func (tpkt *TPKT) Setup() error {
 					return
 				}
 
-				cotpData := make([]byte, cotpLength-1)
+				cotpData := make([]byte, cotpLength)
 
 				_, err = io.ReadFull(server, cotpData)
 
