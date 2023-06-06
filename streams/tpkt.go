@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -20,8 +18,6 @@ const (
 	minimumTPKTLength int = 6
 	maximumPKTLength  int = 65535
 )
-
-const UnknownString string = "Unknown"
 
 // https://github.com/SCADACS/snap7/blob/master/src/core/s7_isotcp.h#LL79-L92
 // https://github.com/boundary/wireshark/blob/master/epan/dissectors/packet-ositp.c#L114-L147
@@ -65,7 +61,7 @@ func (pduType CotpPduType) String() string {
 
 // https://www.rfc-editor.org/rfc/rfc983
 
-type ParameterCode int
+type ParameterCode byte
 
 const (
 	SrcTSAP ParameterCode = 0xc1
@@ -83,7 +79,7 @@ func (pc ParameterCode) String() string {
 		return pcString
 	}
 
-	return UnknownString
+	return fmt.Sprintf("ParameterCode[%x]", byte(pc))
 }
 
 type CRorCCTPDU struct {
@@ -137,59 +133,22 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("cotp.type", tpkt.COTPInfo.PDUType.String())
 	switch tpkt.COTPInfo.PDUType {
 	case CCConnectConfirm, CRConnectRequest:
-		enc.AddString("cotp.DestinationReference", tpkt.COTPInfo.CRorCCData.DestinationReference)
-		enc.AddString("cotp.SourceReference", tpkt.COTPInfo.CRorCCData.SourceReference)
-		enc.AddInt("cotp.Class", tpkt.COTPInfo.CRorCCData.Class)
-		enc.AddBool("cotp.ExtendedFormat", tpkt.COTPInfo.CRorCCData.ExtendedFormat)
-		enc.AddBool("cotp.NoExplicitFlowControl", tpkt.COTPInfo.CRorCCData.NoExplicitFlowControl)
-		enc.AddString("cotp.ParameterCode1", tpkt.COTPInfo.CRorCCData.ParameterCode1.String())
-		enc.AddInt("cotp.ParameterLength1", tpkt.COTPInfo.CRorCCData.ParameterLength1)
-		enc.AddString("cotp.SourceTSAP", tpkt.COTPInfo.CRorCCData.SourceTSAP)
-		enc.AddString("cotp.ParameterCode2", tpkt.COTPInfo.CRorCCData.ParameterCode2.String())
-		enc.AddInt("cotp.ParameterLength2", tpkt.COTPInfo.CRorCCData.ParameterLength2)
-		enc.AddString("cotp.DestinationTSAP", tpkt.COTPInfo.CRorCCData.DestinationTSAP)
+		enc.AddString("cotp.destref", tpkt.COTPInfo.CRorCCData.DestinationReference)
+		enc.AddString("cotp.srcref", tpkt.COTPInfo.CRorCCData.SourceReference)
+		enc.AddInt("cotp.class", tpkt.COTPInfo.CRorCCData.Class)
+		enc.AddBool("cotp.opts.extended_formats", tpkt.COTPInfo.CRorCCData.ExtendedFormat)
+		enc.AddBool("cotp.opts.no_explicit_flow_control", tpkt.COTPInfo.CRorCCData.NoExplicitFlowControl)
+		enc.AddString("cotp.parameter_code.1", tpkt.COTPInfo.CRorCCData.ParameterCode1.String())
+		enc.AddInt("cotp.parameter_length.1", tpkt.COTPInfo.CRorCCData.ParameterLength1)
+		enc.AddString("cotp.src-tsap-bytes", tpkt.COTPInfo.CRorCCData.SourceTSAP)
+		enc.AddString("cotp.parameter_code.2", tpkt.COTPInfo.CRorCCData.ParameterCode2.String())
+		enc.AddInt("cotp.parameter_length.2", tpkt.COTPInfo.CRorCCData.ParameterLength2)
+		enc.AddString("cotp.dst-tsap-bytes", tpkt.COTPInfo.CRorCCData.DestinationTSAP)
 	case DTData:
-		enc.AddString("cotp.TPDUNumber", tpkt.COTPInfo.DtData.TPDUNumber)
-		enc.AddBool("cotp.LastDataUnit", tpkt.COTPInfo.DtData.LastDataUnit)
+		enc.AddString("cotp.eot.tpdu_number", tpkt.COTPInfo.DtData.TPDUNumber)
+		enc.AddBool("cotp.eot.last_data_unit", tpkt.COTPInfo.DtData.LastDataUnit)
 	}
 	return nil
-}
-
-func ByteToBits(b byte) []int {
-	bits := make([]int, 8)
-
-	for i := 0; i < 8; i++ {
-		bit := (b >> uint(i)) & 1
-		bits[7-i] = int(bit)
-	}
-
-	return bits
-}
-
-func BinaryToDecimal(binary []int) int {
-	decimal := 0
-	for i := len(binary) - 1; i >= 0; i-- {
-		decimal += binary[i] << (len(binary) - 1 - i)
-	}
-
-	return decimal
-}
-
-func bitToByte(bit []int) byte {
-	strSlice := make([]string, len(bit))
-
-	for i, num := range bit {
-		strSlice[i] = strconv.Itoa(num)
-	}
-
-	str := strings.Join(strSlice, "")
-	var result byte
-
-	for i := 0; i < len(str); i++ {
-		bit := str[i] - '0'
-		result = result<<1 | bit
-	}
-	return result
 }
 
 // Setup implements the Stream interface.
@@ -285,7 +244,7 @@ func (tpkt *TPKT) Setup() error {
 					cotp.CRorCCData.DestinationTSAP = destinationTSAP
 				case DTData:
 					TPDUNumberAndLastDataUnit := ByteToBits(cotpData[0])
-					cotp.DtData.TPDUNumber = fmt.Sprintf("0x%02X", bitToByte(TPDUNumberAndLastDataUnit[1:]))
+					cotp.DtData.TPDUNumber = fmt.Sprintf("0x%02X", BitToByte(TPDUNumberAndLastDataUnit[1:]))
 					cotp.DtData.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
 				}
 				tpkt.COTPInfo = *cotp
