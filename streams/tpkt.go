@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -98,6 +100,10 @@ type CRorCCTPDU struct {
 	DestinationTSAP       string
 }
 
+type DtData struct {
+	TPDUNumber   string
+	LastDataUnit bool
+}
 type COTP struct {
 	Length  int         `json:"cotp.li"`   //nolint: tagliatelle // Follow wireshark.
 	PDUType CotpPduType `json:"cotp.type"` //nolint: tagliatelle // Follow wireshark.
@@ -105,6 +111,9 @@ type COTP struct {
 	// For CC & CR
 	// https://www.rfc-editor.org/rfc/rfc983
 	CRorCCData CRorCCTPDU `exhaustruct:"optional"`
+
+	// For DT Data
+	DtData DtData `exhaustruct:"optional"`
 }
 
 type TPKT struct {
@@ -139,6 +148,9 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		enc.AddString("cotp.ParameterCode2", tpkt.COTPInfo.CRorCCData.ParameterCode2.String())
 		enc.AddInt("cotp.ParameterLength2", tpkt.COTPInfo.CRorCCData.ParameterLength2)
 		enc.AddString("cotp.DestinationTSAP", tpkt.COTPInfo.CRorCCData.DestinationTSAP)
+	case DTData:
+		enc.AddString("cotp.TPDUNumber", tpkt.COTPInfo.DtData.TPDUNumber)
+		enc.AddBool("cotp.LastDataUnit", tpkt.COTPInfo.DtData.LastDataUnit)
 	}
 	return nil
 }
@@ -161,6 +173,23 @@ func BinaryToDecimal(binary []int) int {
 	}
 
 	return decimal
+}
+
+func bitToByte(bit []int) byte {
+	strSlice := make([]string, len(bit))
+
+	for i, num := range bit {
+		strSlice[i] = strconv.Itoa(num)
+	}
+
+	str := strings.Join(strSlice, "")
+	var result byte
+
+	for i := 0; i < len(str); i++ {
+		bit := str[i] - '0'
+		result = result<<1 | bit
+	}
+	return result
 }
 
 // Setup implements the Stream interface.
@@ -236,14 +265,13 @@ func (tpkt *TPKT) Setup() error {
 					class := class_extendedFormat_NoExplicitFlowControl[:4]
 					extendedFormat := class_extendedFormat_NoExplicitFlowControl[6] == 1
 					noExplicitFlowControl := class_extendedFormat_NoExplicitFlowControl[7] == 1
-
 					parameterCode1 := ParameterCode(cotpData[5])
 					parameterLength1 := int(cotpData[6])
 					sourceTSAP := hex.EncodeToString(cotpData[7:9])
 					parameterCode2 := ParameterCode(cotpData[9])
 					parameterLength2 := int(cotpData[10])
 					destinationTSAP := hex.EncodeToString(cotpData[11:13])
-					//
+
 					cotp.CRorCCData.DestinationReference = destinationReference
 					cotp.CRorCCData.SourceReference = sourceReference
 					cotp.CRorCCData.Class = BinaryToDecimal(class)
@@ -255,6 +283,10 @@ func (tpkt *TPKT) Setup() error {
 					cotp.CRorCCData.ParameterCode2 = parameterCode2
 					cotp.CRorCCData.ParameterLength2 = parameterLength2
 					cotp.CRorCCData.DestinationTSAP = destinationTSAP
+				case DTData:
+					TPDUNumberAndLastDataUnit := ByteToBits(cotpData[0])
+					cotp.DtData.TPDUNumber = fmt.Sprintf("0x%02X", bitToByte(TPDUNumberAndLastDataUnit[1:]))
+					cotp.DtData.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
 				}
 				tpkt.COTPInfo = *cotp
 
