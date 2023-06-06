@@ -13,12 +13,13 @@ import (
 //nolint:exhaustruct // Allow creating zero-value structs
 func detectPayload(payload []byte) Stream {
 	// Prefix-based streams
-	if DetectTLS(payload) {
+	switch {
+	case DetectTLS(payload):
 		return &TLS{}
-	} else if DetectTPKT(payload) {
-		return &TPKT{}
-	} else if DetectModbusTCP(payload) {
+	case DetectModbusTCP(payload):
 		return &ModbusTCP{}
+	case DetectTPKT(payload):
+		return &TPKT{}
 	}
 
 	// Line-based streams (like HTTP/1)
