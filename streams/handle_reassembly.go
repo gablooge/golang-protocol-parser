@@ -15,7 +15,10 @@ func detectPayload(payload []byte) Stream {
 	// Prefix-based streams
 	if DetectTLS(payload) {
 		return &TLS{}
+	} else if DetectModbusTCP(payload) {
+		return &ModbusTCP{}
 	}
+
 	// Line-based streams (like HTTP/1)
 	// firstRow, _, found := bytes.Cut(payload, []byte("\r\n"))
 	rows := bytes.Split(payload, []byte("\r\n"))
