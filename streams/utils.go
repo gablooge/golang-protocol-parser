@@ -23,7 +23,8 @@ func BitToByte(bit []int) byte {
 }
 
 func ByteToBits(b byte) []int {
-	bits := make([]int, 8)
+	totalBits := 8
+	bits := make([]int, totalBits)
 
 	for i := 0; i < 8; i++ {
 		bit := (b >> uint(i)) & 1

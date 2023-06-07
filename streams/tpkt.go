@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 
@@ -96,10 +95,11 @@ type CRorCCTPDU struct {
 	DestinationTSAP       string
 }
 
-type DtData struct {
-	TPDUNumber   string
+type TPDUNumberAndEOT struct {
+	TPDUNumber   byte
 	LastDataUnit bool
 }
+
 type COTP struct {
 	Length  int         `json:"cotp.li"`   //nolint: tagliatelle // Follow wireshark.
 	PDUType CotpPduType `json:"cotp.type"` //nolint: tagliatelle // Follow wireshark.
@@ -108,8 +108,8 @@ type COTP struct {
 	// https://www.rfc-editor.org/rfc/rfc983
 	CRorCCData CRorCCTPDU `exhaustruct:"optional"`
 
-	// For DT Data
-	DtData DtData `exhaustruct:"optional"`
+	// TPDU-NR and EOT For DT or ED Data
+	TPDUNumberAndEOT TPDUNumberAndEOT `exhaustruct:"optional"`
 }
 
 type TPKT struct {
@@ -131,6 +131,7 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 
 	enc.AddInt("cotp.li", tpkt.COTPInfo.Length)
 	enc.AddString("cotp.type", tpkt.COTPInfo.PDUType.String())
+
 	switch tpkt.COTPInfo.PDUType {
 	case CCConnectConfirm, CRConnectRequest:
 		enc.AddString("cotp.destref", tpkt.COTPInfo.CRorCCData.DestinationReference)
@@ -144,9 +145,9 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		enc.AddString("cotp.parameter_code.2", tpkt.COTPInfo.CRorCCData.ParameterCode2.String())
 		enc.AddInt("cotp.parameter_length.2", tpkt.COTPInfo.CRorCCData.ParameterLength2)
 		enc.AddString("cotp.dst-tsap-bytes", tpkt.COTPInfo.CRorCCData.DestinationTSAP)
-	case DTData:
-		enc.AddString("cotp.eot.tpdu_number", tpkt.COTPInfo.DtData.TPDUNumber)
-		enc.AddBool("cotp.eot.last_data_unit", tpkt.COTPInfo.DtData.LastDataUnit)
+	case EDExpeditedData, DTData:
+		enc.AddString("cotp.tpdu-number", fmt.Sprintf("0x%02X", tpkt.COTPInfo.TPDUNumberAndEOT.TPDUNumber))
+		enc.AddBool("cotp.eot", tpkt.COTPInfo.TPDUNumberAndEOT.LastDataUnit)
 	}
 	return nil
 }
@@ -162,14 +163,10 @@ func (tpkt *TPKT) Setup() error {
 
 		for {
 			var clientTPKTHeader [TPKTHeaderLength]byte
+
 			_, err := io.ReadFull(client, clientTPKTHeader[:])
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
-				tpkt.L.Warn("TPKT: request parse failed", zap.Error(err))
-
-				continue
+			if err != nil {
+				return
 			}
 		}
 	}()
@@ -179,14 +176,10 @@ func (tpkt *TPKT) Setup() error {
 
 		for {
 			var serverTPKTHeader [minimumTPKTLength]byte
+
 			_, err := io.ReadFull(server, serverTPKTHeader[:])
-
-			if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) {
-				break
-			} else if err != nil {
-				tpkt.L.Warn("TPKT: response parse failed", zap.Error(err))
-
-				continue
+			if err != nil {
+				return
 			}
 
 			if bytes.Equal(serverTPKTHeader[0:2], []byte{0x03, 0x00}) {
@@ -212,18 +205,19 @@ func (tpkt *TPKT) Setup() error {
 					return
 				}
 
-				cotp := &COTP{}
-				cotp.Length = cotpLength
-				cotp.PDUType = cotpPduType
+				cotp := &COTP{
+					Length:  cotpLength,
+					PDUType: cotpPduType,
+				}
 
 				switch cotpPduType {
 				case CCConnectConfirm, CRConnectRequest:
 					destinationReference := fmt.Sprintf("0x%02X", cotpData[:2])
 					sourceReference := fmt.Sprintf("0x%02X", cotpData[2:4])
-					class_extendedFormat_NoExplicitFlowControl := ByteToBits(cotpData[4])
-					class := class_extendedFormat_NoExplicitFlowControl[:4]
-					extendedFormat := class_extendedFormat_NoExplicitFlowControl[6] == 1
-					noExplicitFlowControl := class_extendedFormat_NoExplicitFlowControl[7] == 1
+					coptClassOptions := ByteToBits(cotpData[4])
+					class := coptClassOptions[:4]
+					extendedFormat := coptClassOptions[6] == 1
+					noExplicitFlowControl := coptClassOptions[7] == 1
 					parameterCode1 := ParameterCode(cotpData[5])
 					parameterLength1 := int(cotpData[6])
 					sourceTSAP := hex.EncodeToString(cotpData[7:9])
@@ -242,11 +236,12 @@ func (tpkt *TPKT) Setup() error {
 					cotp.CRorCCData.ParameterCode2 = parameterCode2
 					cotp.CRorCCData.ParameterLength2 = parameterLength2
 					cotp.CRorCCData.DestinationTSAP = destinationTSAP
-				case DTData:
+				case EDExpeditedData, DTData:
 					TPDUNumberAndLastDataUnit := ByteToBits(cotpData[0])
-					cotp.DtData.TPDUNumber = fmt.Sprintf("0x%02X", BitToByte(TPDUNumberAndLastDataUnit[1:]))
-					cotp.DtData.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
+					cotp.TPDUNumberAndEOT.TPDUNumber = BitToByte(TPDUNumberAndLastDataUnit[1:])
+					cotp.TPDUNumberAndEOT.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
 				}
+
 				tpkt.COTPInfo = *cotp
 
 				tpkt.L.Debug("TPKT: response",
@@ -254,7 +249,7 @@ func (tpkt *TPKT) Setup() error {
 					zap.Uint16("tpkt.length", tpkt.Length),
 					zap.Uint16("tpkt.length", tpkt.Length),
 					zap.Int("cotp.li", tpkt.COTPInfo.Length),
-					zap.String("cotp.type", cotp.PDUType.String()),
+					zap.Stringer("cotp.type", cotp.PDUType),
 				)
 			}
 		}
