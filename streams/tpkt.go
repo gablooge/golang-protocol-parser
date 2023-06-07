@@ -110,16 +110,63 @@ type COTP struct {
 
 	// TPDU-NR and EOT For DT or ED Data
 	TPDUNumberAndEOT TPDUNumberAndEOT `exhaustruct:"optional"`
+
+	// MMS
+	MMS MMS `exhaustruct:"optional"`
 }
 
-type TPKT struct {
-	BaseStream
-	ReaderStream
+type MMSType uint16
 
-	Version  int    `json:"tpkt.version"` //nolint: tagliatelle // Follow wireshark.
-	Length   uint16 `json:"tpkt.length"`  //nolint: tagliatelle // Follow wireshark.
-	COTPInfo COTP   `exhaustruct:"optional"`
+const (
+	ConfirmedRequestPduStart  MMSType = 0xa0
+	ConfirmedResponsePduStart MMSType = 0xa1
+	InitiateResponsePduStart  MMSType = 0xa9
+)
+
+type ConfirmedRequestPDU struct {
+	InvokedId               uint32
+	ConfirmedServiceRequest uint16
 }
+
+func (cr *ConfirmedRequestPDU) IsZero() bool {
+	return cr.InvokedId == 0 && cr.ConfirmedServiceRequest == 0
+}
+
+type ConfirmedResponsePDU struct {
+	InvokedId                uint32
+	ConfirmedServiceResponse uint16
+}
+
+func (cr *ConfirmedResponsePDU) IsZero() bool {
+	return cr.InvokedId == 0 && cr.ConfirmedServiceResponse == 0
+}
+
+type InitiateResponsePdu struct {
+	LocaleDetailCalled                  uint32
+	NegociatedMaxServOutstandingCalling uint32
+	NegociatedMaxServOutstandingCalled  uint32
+	NegociatedDataStructureNestingLevel uint32
+}
+
+func (ir *InitiateResponsePdu) IsZero() bool {
+	return ir.LocaleDetailCalled == 0 && ir.NegociatedMaxServOutstandingCalling == 0 && ir.NegociatedMaxServOutstandingCalled == 0 && ir.NegociatedDataStructureNestingLevel == 0
+}
+
+type (
+	MMS struct {
+		ConfirmedRequestPDU  ConfirmedRequestPDU  `exhaustruct:"optional"`
+		ConfirmedResponsePDU ConfirmedResponsePDU `exhaustruct:"optional"`
+		InitiateResponsePdu  InitiateResponsePdu  `exhaustruct:"optional"`
+	}
+	TPKT struct {
+		BaseStream
+		ReaderStream
+
+		Version  int    `json:"tpkt.version"` //nolint: tagliatelle // Follow wireshark.
+		Length   uint16 `json:"tpkt.length"`  //nolint: tagliatelle // Follow wireshark.
+		COTPInfo COTP   `exhaustruct:"optional"`
+	}
+)
 
 func (tpkt *TPKT) Name() string {
 	return "TPKT"
@@ -148,8 +195,28 @@ func (tpkt *TPKT) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	case EDExpeditedData, DTData:
 		enc.AddString("cotp.tpdu-number", fmt.Sprintf("0x%02X", tpkt.COTPInfo.TPDUNumberAndEOT.TPDUNumber))
 		enc.AddBool("cotp.eot", tpkt.COTPInfo.TPDUNumberAndEOT.LastDataUnit)
+		if !tpkt.COTPInfo.MMS.ConfirmedRequestPDU.IsZero() {
+			enc.AddUint32("cotp.mms.ConfirmedRequestPDU.InvokedId", tpkt.COTPInfo.MMS.ConfirmedRequestPDU.InvokedId)
+		} else if !tpkt.COTPInfo.MMS.ConfirmedResponsePDU.IsZero() {
+			enc.AddUint32("cotp.mms.ConfirmedResponsePDU.InvokedId", tpkt.COTPInfo.MMS.ConfirmedResponsePDU.InvokedId)
+		} else if !tpkt.COTPInfo.MMS.InitiateResponsePdu.IsZero() {
+			enc.AddUint32("cotp.mms.InitiateResponsePdu.LocaleDetailCalled", tpkt.COTPInfo.MMS.InitiateResponsePdu.LocaleDetailCalled)
+			enc.AddUint32("cotp.mms.InitiateResponsePdu.NegociatedMaxServOutstandingCalling", tpkt.COTPInfo.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalling)
+			enc.AddUint32("cotp.mms.InitiateResponsePdu.NegociatedMaxServOutstandingCalled", tpkt.COTPInfo.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalled)
+			enc.AddUint32("cotp.mms.InitiateResponsePdu.NegociatedDataStructureNestingLevel", tpkt.COTPInfo.MMS.InitiateResponsePdu.NegociatedDataStructureNestingLevel)
+		}
 	}
 	return nil
+}
+
+func findMMSStartindex(data []byte) int {
+	for index, dt := range data {
+		switch dt {
+		case byte(ConfirmedRequestPduStart), byte(ConfirmedResponsePduStart), byte(InitiateResponsePduStart):
+			return index
+		}
+	}
+	return -1
 }
 
 // Setup implements the Stream interface.
@@ -196,6 +263,9 @@ func (tpkt *TPKT) Setup() error {
 					return
 				}
 
+				if cotpPduType == DTData {
+					cotpLength = cotpLength - 1
+				}
 				cotpData := make([]byte, cotpLength)
 
 				_, err = io.ReadFull(server, cotpData)
@@ -240,6 +310,63 @@ func (tpkt *TPKT) Setup() error {
 					TPDUNumberAndLastDataUnit := ByteToBits(cotpData[0])
 					cotp.TPDUNumberAndEOT.TPDUNumber = BitToByte(TPDUNumberAndLastDataUnit[1:])
 					cotp.TPDUNumberAndEOT.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
+
+					afterCotpLength := int(tpkt.Length) - 4 - 3
+					afterCOTPData := make([]byte, afterCotpLength)
+
+					_, err = io.ReadFull(server, afterCOTPData)
+
+					if err != nil {
+						// Incomplete message or connection closed.
+						return
+					}
+					// fmt.Printf("%X\n", afterCOTPData)
+
+					mmsStartIndex := findMMSStartindex(afterCOTPData)
+					if mmsStartIndex == -1 {
+						return
+					}
+					mmsData := afterCOTPData[mmsStartIndex:]
+					mmsPduData := mmsData[2:] // jump 2 byte in next attribute
+
+					switch mmsData[0] {
+					case byte(ConfirmedResponsePduStart), byte(ConfirmedRequestPduStart):
+						invokedIdByteLength := mmsPduData[1]
+						invokedIdByte := mmsPduData[2 : 2+invokedIdByteLength]
+						invokedId := bytesToInt(invokedIdByte)
+						if mmsData[0] == byte(ConfirmedResponsePduStart) {
+							cotp.MMS.ConfirmedResponsePDU.InvokedId = uint32(invokedId)
+							// cotp.MMS.ConfirmedResponsePDU.ConfirmedServiceResponse =
+						} else {
+							cotp.MMS.ConfirmedRequestPDU.InvokedId = uint32(invokedId)
+							// cotp.MMS.ConfirmedRequestPDU.ConfirmedServiceRequest =
+						}
+					case byte(InitiateResponsePduStart):
+						localeDetailCalledByteLength := mmsPduData[1]
+						localeDetailCalledByte := mmsPduData[2 : 2+localeDetailCalledByteLength]
+						localeDetailCalled := bytesToInt(localeDetailCalledByte)
+						nextByteIndex := 2 + localeDetailCalledByteLength
+						negociatedMaxServOutstandingCallingByteLength := mmsPduData[nextByteIndex+1]
+						negociatedMaxServOutstandingCallingByte := mmsPduData[nextByteIndex+2 : nextByteIndex+2+negociatedMaxServOutstandingCallingByteLength]
+						negociatedMaxServOutstandingCalling := bytesToInt(negociatedMaxServOutstandingCallingByte)
+						nextByteIndex = nextByteIndex + 2 + negociatedMaxServOutstandingCallingByteLength
+						negociatedMaxServOutstandingCalledByteLength := mmsPduData[nextByteIndex+1]
+						negociatedMaxServOutstandingCalledByte := mmsPduData[nextByteIndex+2 : nextByteIndex+2+negociatedMaxServOutstandingCalledByteLength]
+						negociatedMaxServOutstandingCalled := bytesToInt(negociatedMaxServOutstandingCalledByte)
+						nextByteIndex = nextByteIndex + 2 + negociatedMaxServOutstandingCalledByteLength
+						negociatedDataStructureNestingLevelByteLength := mmsPduData[nextByteIndex+1]
+						negociatedDataStructureNestingLevelByte := mmsPduData[nextByteIndex+2 : nextByteIndex+2+negociatedDataStructureNestingLevelByteLength]
+						negociatedDataStructureNestingLevel := bytesToInt(negociatedDataStructureNestingLevelByte)
+						//
+						cotp.MMS.InitiateResponsePdu.LocaleDetailCalled = uint32(localeDetailCalled)
+						cotp.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalling = uint32(negociatedMaxServOutstandingCalling)
+						cotp.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalled = uint32(negociatedMaxServOutstandingCalled)
+						cotp.MMS.InitiateResponsePdu.NegociatedDataStructureNestingLevel = uint32(negociatedDataStructureNestingLevel)
+						// fmt.Println(cotp.MMS.InitiateResponsePdu.LocaleDetailCalled)
+						// fmt.Println(cotp.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalling)
+						// fmt.Println(cotp.MMS.InitiateResponsePdu.NegociatedMaxServOutstandingCalled)
+						// fmt.Println(cotp.MMS.InitiateResponsePdu.NegociatedDataStructureNestingLevel)
+					}
 				}
 
 				tpkt.COTPInfo = *cotp

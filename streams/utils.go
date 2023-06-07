@@ -42,3 +42,12 @@ func BinaryToDecimal(binary []int) int {
 
 	return decimal
 }
+
+func bytesToInt(bytes []byte) int {
+	var result int
+	for _, b := range bytes {
+		result = (result << 8) + int(b)
+	}
+
+	return result
+}
