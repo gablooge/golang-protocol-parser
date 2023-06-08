@@ -25,6 +25,8 @@ func detect(info detectInfo) Stream {
 	// Prefix-based streams
 	if DetectTLS(info.payload) {
 		return &TLS{}
+	} else if DetectIEC60870_5(payload) {
+		return &IEC60870_5{}
 	}
 
 	// Line-based streams (like HTTP/1)
