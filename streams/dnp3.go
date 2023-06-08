@@ -3,7 +3,6 @@ package streams
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 
@@ -78,23 +77,16 @@ type DataLinkLayer struct {
 
 	PhysicalTransmissionDirection bool `json:"dnp3.ctl.dir"` //nolint: tagliatelle // Follow wireshark.
 	PrimaryMessage                bool `json:"dnp3.ctl.prm"` //nolint: tagliatelle // Follow wireshark.
-	FrameCountBit                 bool `json:"dnp3.ctl.fcb"` //nolint: tagliatelle // Follow wireshark.
-	FrameCountBitValid            bool `json:"dnp3.ctl.fcv"` //nolint: tagliatelle // Follow wireshark.
 
-	DataFlowControl bool `json:"dnp3.ctl.dfc" exhaustruct:"optional"` //nolint: tagliatelle // Follow wireshark.
+	FrameCountBit       bool                    `json:"dnp3.ctl.fcb" exhaustruct:"optional"`     //nolint: tagliatelle,lll // Follow wireshark.
+	FrameCountBitValid  bool                    `json:"dnp3.ctl.fcv" exhaustruct:"optional"`     //nolint: tagliatelle,lll // Follow wireshark.
+	PrimaryFunctionCode *PrimaryServiceFunction `json:"dnp3.ctl.prifunc" exhaustruct:"optional"` //nolint: tagliatelle,lll // Follow wireshark.
 
-	FunctionCode int `json:"dnp3.ctl.prifunc"` //nolint: tagliatelle // Follow wireshark.
+	DataFlowControl       bool                      `json:"dnp3.ctl.dfc" exhaustruct:"optional"`     //nolint: tagliatelle,lll // Follow wireshark.
+	SecondaryFunctionCode *SecondaryServiceFunction `json:"dnp3.ctl.secfunc" exhaustruct:"optional"` //nolint: tagliatelle,lll // Follow wireshark.
 
 	Destination uint16 `json:"dnp3.dst"` //nolint: tagliatelle // Follow wireshark.
 	Source      uint16 `json:"dnp3.src"` //nolint: tagliatelle // Follow wireshark.
-}
-
-func (dll *DataLinkLayer) ServiceFunction() string {
-	if dll.PrimaryMessage {
-		return PrimaryServiceFunction(dll.FunctionCode).String()
-	}
-
-	return SecondaryServiceFunction(dll.FunctionCode).String()
 }
 
 type ApplicationFunctionCode uint16
@@ -142,24 +134,35 @@ func (d *DNP3) Name() string {
 }
 
 func (d *DNP3) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	startBytes := hex.EncodeToString(d.DataLinkHeader.StartBytes)
+	startBytes := fmt.Sprintf("0x%02X", d.DataLinkHeader.StartBytes)
 	enc.AddString("dnp3.start", startBytes)
 	enc.AddUint16("dnp3.len", d.DataLinkHeader.Length)
 
 	enc.AddBool("dnp3.ctl.dir", d.DataLinkHeader.PhysicalTransmissionDirection)
 	enc.AddBool("dnp3.ctl.prm", d.DataLinkHeader.PrimaryMessage)
+
 	enc.AddBool("dnp3.ctl.fcb", d.DataLinkHeader.FrameCountBit)
 	enc.AddBool("dnp3.ctl.fcv", d.DataLinkHeader.FrameCountBitValid)
 
+	if d.DataLinkHeader.PrimaryFunctionCode != nil {
+		enc.AddString("dnp3.ctl.prifunc", d.DataLinkHeader.PrimaryFunctionCode.String())
+	}
+
+	enc.AddBool("dnp3.ctl.dfc", d.DataLinkHeader.FrameCountBitValid)
+
+	if d.DataLinkHeader.SecondaryFunctionCode != nil {
+		enc.AddString("dnp3.ctl.secfunc", d.DataLinkHeader.SecondaryFunctionCode.String())
+	}
+
 	enc.AddUint16("dnp3.dst", d.DataLinkHeader.Destination)
 	enc.AddUint16("dnp3.src", d.DataLinkHeader.Source)
-
-	enc.AddString("dnp3.ctl.prifunc", d.DataLinkHeader.ServiceFunction())
 
 	return nil
 }
 
 // Setup implements the Stream interface.
+//
+//nolint:funlen // TODO: create parse header info separately.
 func (d *DNP3) Setup() error {
 	client, server := d.Readers()
 
@@ -173,6 +176,25 @@ func (d *DNP3) Setup() error {
 			if err != nil {
 				return
 			}
+
+			// if bytes.Equal(clientDataLinkHeader[0:2], []byte{0x05, 0x64}) {
+			// 	clientControlByte := clientDataLinkHeader[3]
+			// 	clientControlBits := ByteToBits(clientControlByte)
+
+			// 	d.DataLinkHeader.PrimaryMessage = clientControlBits[1] == 1
+			// 	if d.DataLinkHeader.PrimaryMessage {
+			// 		prmFunc := PrimaryServiceFunction(BinaryToDecimal(clientControlBits[4:]))
+			// 		d.DataLinkHeader.PrimaryFunctionCode = &prmFunc
+			// 	} else {
+			// 		secondFunc := SecondaryServiceFunction(BinaryToDecimal(clientControlBits[4:]))
+			// 		d.DataLinkHeader.SecondaryFunctionCode = &secondFunc
+			// 	}
+			// }
+
+			d.L.Debug("DNP3: request",
+				zap.Bool("dnp3.ctl.prm", d.DataLinkHeader.PrimaryMessage),
+				zap.Stringer("dnp3.ctl.prifunc", d.DataLinkHeader.PrimaryFunctionCode),
+			)
 		}
 	}()
 
@@ -180,40 +202,42 @@ func (d *DNP3) Setup() error {
 		defer server.Close()
 
 		for {
-			var serverDataLinkLayer [DataLinkLayerLength]byte
+			var serverDataLinkHeader [DataLinkLayerLength]byte
 
-			_, err := io.ReadFull(server, serverDataLinkLayer[:])
+			_, err := io.ReadFull(server, serverDataLinkHeader[:])
 			if err != nil {
 				return
 			}
 
-			startBytes := serverDataLinkLayer[0:2]
-			dataLinkLength := int(serverDataLinkLayer[2])
-			controlByte := serverDataLinkLayer[3]
-			control := ByteToBits(controlByte)
+			if bytes.Equal(serverDataLinkHeader[0:2], []byte{0x05, 0x64}) {
+				d.DataLinkHeader.StartBytes = serverDataLinkHeader[0:2]
+				dataLinkLength := uint16(serverDataLinkHeader[2])
+				d.DataLinkHeader.Length = dataLinkLength
 
-			dataLinkDestination := binary.BigEndian.Uint16(serverDataLinkLayer[4:6])
-			dataLinkSource := binary.BigEndian.Uint16(serverDataLinkLayer[6:8])
+				serverControlByte := serverDataLinkHeader[3]
+				serverControlBits := ByteToBits(serverControlByte)
 
-			dataLinkLayer := DataLinkLayer{
-				StartBytes:  startBytes,
-				Length:      uint16(dataLinkLength),
-				Destination: dataLinkDestination,
-				Source:      dataLinkSource,
-				// control
-				PhysicalTransmissionDirection: control[0] == 1,
-				PrimaryMessage:                control[1] == 1,
-				FrameCountBit:                 control[2] == 1,
-				FrameCountBitValid:            control[3] == 1,
-				FunctionCode:                  BinaryToDecimal(control[4:]),
+				d.DataLinkHeader.PhysicalTransmissionDirection = serverControlBits[0] == 1
+				d.DataLinkHeader.PrimaryMessage = serverControlBits[1] == 1
+
+				if d.DataLinkHeader.PrimaryMessage {
+					prmFunc := PrimaryServiceFunction(BinaryToDecimal(serverControlBits[4:]))
+					d.DataLinkHeader.PrimaryFunctionCode = &prmFunc
+					d.DataLinkHeader.FrameCountBit = serverControlBits[2] == 1
+					d.DataLinkHeader.FrameCountBitValid = serverControlBits[3] == 1
+				} else {
+					secondFunc := SecondaryServiceFunction(BinaryToDecimal(serverControlBits[4:]))
+					d.DataLinkHeader.SecondaryFunctionCode = &secondFunc
+					d.DataLinkHeader.DataFlowControl = serverControlBits[3] == 1
+				}
+
+				d.DataLinkHeader.Destination = binary.BigEndian.Uint16(serverDataLinkHeader[4:6])
+				d.DataLinkHeader.Source = binary.BigEndian.Uint16(serverDataLinkHeader[6:8])
 			}
-			d.DataLinkHeader = dataLinkLayer
 
 			d.L.Debug("DNP3: response",
-				zap.String("dnp3.start", hex.EncodeToString(startBytes)),
-				zap.Uint16("dnp3.len", dataLinkLayer.Length),
-				zap.Uint16("dnp3.dst", dataLinkLayer.Destination),
-				zap.Uint16("dnp3.src", dataLinkLayer.Source),
+				zap.Bool("dnp3.ctl.prm", d.DataLinkHeader.PrimaryMessage),
+				zap.Stringer("dnp3.ctl.prifunc", d.DataLinkHeader.PrimaryFunctionCode),
 			)
 		}
 	}()
@@ -222,5 +246,5 @@ func (d *DNP3) Setup() error {
 }
 
 func DetectDNP3(payload []byte) bool {
-	return len(payload) >= 10 && bytes.Equal(payload[0:2], []byte{0x05, 0x64})
+	return len(payload) >= DataLinkLayerLength && bytes.Equal(payload[0:2], []byte{0x05, 0x64})
 }
