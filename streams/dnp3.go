@@ -160,6 +160,14 @@ func (d *DNP3) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
+const (
+	controlFuncBitMask = 0b0000_1111
+	bitMask0           = 0b1000_0000
+	bitMask1           = 0b0100_0000
+	bitMask2           = 0b0010_0000
+	bitMask3           = 0b0001_0000
+)
+
 // Setup implements the Stream interface.
 //
 //nolint:funlen // TODO: create parse header info separately.
@@ -179,14 +187,14 @@ func (d *DNP3) Setup() error {
 
 			// if bytes.Equal(clientDataLinkHeader[0:2], []byte{0x05, 0x64}) {
 			// 	clientControlByte := clientDataLinkHeader[3]
-			// 	clientControlBits := ByteToBits(clientControlByte)
+			//  controlFunctionCode := serverControl & controlFuncBitMask
 
-			// 	d.DataLinkHeader.PrimaryMessage = clientControlBits[1] == 1
+			// 	d.DataLinkHeader.PrimaryMessage = clientControlByte&bitMask1 != 0
 			// 	if d.DataLinkHeader.PrimaryMessage {
-			// 		prmFunc := PrimaryServiceFunction(BinaryToDecimal(clientControlBits[4:]))
+			// 		prmFunc := PrimaryServiceFunction(controlFunctionCode)
 			// 		d.DataLinkHeader.PrimaryFunctionCode = &prmFunc
 			// 	} else {
-			// 		secondFunc := SecondaryServiceFunction(BinaryToDecimal(clientControlBits[4:]))
+			// 		secondFunc := SecondaryServiceFunction(controlFunctionCode))
 			// 		d.DataLinkHeader.SecondaryFunctionCode = &secondFunc
 			// 	}
 			// }
@@ -214,21 +222,21 @@ func (d *DNP3) Setup() error {
 				dataLinkLength := uint16(serverDataLinkHeader[2])
 				d.DataLinkHeader.Length = dataLinkLength
 
-				serverControlByte := serverDataLinkHeader[3]
-				serverControlBits := ByteToBits(serverControlByte)
+				serverControl := serverDataLinkHeader[3]
+				controlFunctionCode := serverControl & controlFuncBitMask
 
-				d.DataLinkHeader.PhysicalTransmissionDirection = serverControlBits[0] == 1
-				d.DataLinkHeader.PrimaryMessage = serverControlBits[1] == 1
+				d.DataLinkHeader.PhysicalTransmissionDirection = serverControl&bitMask0 != 0
+				d.DataLinkHeader.PrimaryMessage = serverControl&bitMask1 != 0
 
 				if d.DataLinkHeader.PrimaryMessage {
-					prmFunc := PrimaryServiceFunction(BinaryToDecimal(serverControlBits[4:]))
+					prmFunc := PrimaryServiceFunction(controlFunctionCode)
 					d.DataLinkHeader.PrimaryFunctionCode = &prmFunc
-					d.DataLinkHeader.FrameCountBit = serverControlBits[2] == 1
-					d.DataLinkHeader.FrameCountBitValid = serverControlBits[3] == 1
+					d.DataLinkHeader.FrameCountBit = serverControl&bitMask2 != 0
+					d.DataLinkHeader.FrameCountBitValid = serverControl&bitMask3 != 0
 				} else {
-					secondFunc := SecondaryServiceFunction(BinaryToDecimal(serverControlBits[4:]))
+					secondFunc := SecondaryServiceFunction(controlFunctionCode)
 					d.DataLinkHeader.SecondaryFunctionCode = &secondFunc
-					d.DataLinkHeader.DataFlowControl = serverControlBits[3] == 1
+					d.DataLinkHeader.DataFlowControl = serverControl&bitMask3 != 0
 				}
 
 				d.DataLinkHeader.Destination = binary.BigEndian.Uint16(serverDataLinkHeader[4:6])
@@ -239,6 +247,7 @@ func (d *DNP3) Setup() error {
 				zap.Bool("dnp3.ctl.prm", d.DataLinkHeader.PrimaryMessage),
 				zap.Stringer("dnp3.ctl.prifunc", d.DataLinkHeader.PrimaryFunctionCode),
 			)
+
 		}
 	}()
 

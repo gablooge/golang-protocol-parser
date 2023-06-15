@@ -22,18 +22,6 @@ func BitToByte(bit []int) byte {
 	return result
 }
 
-func ByteToBits(b byte) []int {
-	totalBits := 8
-	bits := make([]int, totalBits)
-
-	for i := 0; i < 8; i++ {
-		bit := (b >> uint(i)) & 1
-		bits[7-i] = int(bit)
-	}
-
-	return bits
-}
-
 func BinaryToDecimal(binary []int) int {
 	decimal := 0
 	for i := len(binary) - 1; i >= 0; i-- {
