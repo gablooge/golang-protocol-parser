@@ -25,6 +25,8 @@ func detect(info detectInfo) Stream {
 	// Prefix-based streams
 	if DetectTLS(info.payload) {
 		return &TLS{}
+	} else if DetectTPKT(info.payload) {
+		return &TPKT{}
 	}
 
 	// Line-based streams (like HTTP/1)
