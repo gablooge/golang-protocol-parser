@@ -247,7 +247,7 @@ func (tpkt *TPKT) Setup() error {
 			}
 		}
 	}()
-
+	println()
 	go func() {
 		defer server.Close()
 
@@ -318,9 +318,10 @@ func (tpkt *TPKT) Setup() error {
 					cotp.CRorCCData.ParameterLength2 = parameterLength2
 					cotp.CRorCCData.DestinationTSAP = destinationTSAP
 				case EDExpeditedData, DTData:
+
 					TPDUNumberAndLastDataUnit := ByteToBits(cotpData[0])
 					cotp.TPDUNumberAndEOT.TPDUNumber = BitToByte(TPDUNumberAndLastDataUnit[1:])
-					cotp.TPDUNumberAndEOT.LastDataUnit = TPDUNumberAndLastDataUnit[0] == 1
+					cotp.TPDUNumberAndEOT.LastDataUnit = cotpData[0]&0b1000_0000 != 0
 
 					afterCotpLength := int(tpkt.Length) - TPKTHeaderLength - COTPTPDULength
 					afterCOTPData := make([]byte, afterCotpLength)
