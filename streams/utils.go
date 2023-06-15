@@ -43,10 +43,12 @@ func BinaryToDecimal(binary []int) int {
 	return decimal
 }
 
-func bytesToInt(bytes []byte) int {
+func BytesToInt(bytes []byte) int {
 	var result int
+	maxBitTotal := 8
+
 	for _, b := range bytes {
-		result = (result << 8) + int(b)
+		result = (result << maxBitTotal) + int(b)
 	}
 
 	return result
