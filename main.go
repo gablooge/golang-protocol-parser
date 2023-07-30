@@ -197,14 +197,13 @@ func main() {
 	// printGoose()
 	// printBLE()
 	// printLorawan()
+	// printModbusTcp()
 	// printModbusUdp()
 	// printStream("pcaps/http.pcap")
-	printStream("pcaps/modbustcp.pcap")
+	printStream("pcaps/dnp3.pcap")
+	// printStream("pcaps/modbustcp.pcap")
 
 	// TODO: add printStream("pcaps/tpkt.pcap")
-	// TODO: add printStream("pcaps/copt.pcap")
-	// TODO: add printStream("pcaps/mms.pcap")
 	// TODO: add printStream("pcaps/IEC60870-5.pcap")
-	// TODO: add printStream("pcaps/DNP3.pcap")
 	fmt.Println("======= Done =======")
 }

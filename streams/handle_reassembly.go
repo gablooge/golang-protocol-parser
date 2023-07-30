@@ -25,6 +25,8 @@ func detect(info detectInfo) Stream {
 	// Prefix-based streams
 	if DetectTLS(info.payload) {
 		return &TLS{}
+	} else if DetectDNP3(info.payload) {
+		return &DNP3{}
 	}
 
 	// Line-based streams (like HTTP/1)

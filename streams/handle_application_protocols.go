@@ -9,10 +9,10 @@ type ApplicationProtocol string
 //nolint:godot // We want to comment code out, not write sentences
 const (
 	// Layers
-	ApplicationProtocolGOOSE ApplicationProtocol = "goose"
-	ApplicationProtocolBLE   ApplicationProtocol = "ble"
-	// ApplicationProtocolModbus ApplicationProtocol = "modbus"
-	// ApplicationProtocolDNP3   ApplicationProtocol = "dnp3"
+	ApplicationProtocolGOOSE  ApplicationProtocol = "goose"
+	ApplicationProtocolBLE    ApplicationProtocol = "ble"
+	ApplicationProtocolModbus ApplicationProtocol = "modbus"
+	ApplicationProtocolDNP3   ApplicationProtocol = "dnp3"
 	// ApplicationProtocolCAN    ApplicationProtocol = "can"
 	// Streams
 	ApplicationProtocolHTTP      ApplicationProtocol = "http"
@@ -66,6 +66,10 @@ func applicationProtocolsFromStream(stream Stream) []ApplicationProtocol {
 
 	if _, ok := stream.(*TLS); ok {
 		return []ApplicationProtocol{ApplicationProtocolTLS}
+	}
+
+	if _, ok := stream.(*DNP3); ok {
+		return []ApplicationProtocol{ApplicationProtocolDNP3}
 	}
 
 	if _, ok := stream.(*ModbusTCP); ok {
